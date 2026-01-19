@@ -1,0 +1,33 @@
+from pspf.events.base import GameEvent
+from typing import Literal, List, Dict, Any, Optional
+from app.schemas.items import WeaponStats
+
+class CombatStarted(GameEvent):
+    combat_id: str
+    attacker_id: int
+    defender_id: Optional[int] = None # None for AI
+    mode: Literal["pve", "pvp"] = "pve"
+    context: Dict[str, Any] = {} # stats, names, etc
+
+class CombatAction(GameEvent):
+    combat_id: str
+    actor_id: int # Player ID or 'ai'
+    action_type: str # 'attack', 'use_item'
+    stance: str = "normal" # normal, berserk, defensive
+    weapon_ids: List[int] = [] # Up to 2
+    item_id: Optional[int] = None
+
+class TurnProcessed(GameEvent):
+    combat_id: str
+    turn_number: int
+    actor_id: int
+    damage_dealt: int
+    description: str
+    attacker_hp: int
+    defender_hp: int # In PvE, this is the monster
+
+class CombatEnded(GameEvent):
+    combat_id: str
+    winner_id: int
+    loot: Optional[Dict[str, Any]] = None
+    xp_gained: int = 0

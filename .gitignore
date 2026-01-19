@@ -1,0 +1,39 @@
+# Common
+.venv/
+.env
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.pid
+nohup.out
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+npm-debug.log*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Local artifacts
+argonvale-backend/argonvale.db
+argonvale-backend/server.log
+argonvale-backend/server.pid
+argonvale-backend/nohup.out
+argonvale-frontend/node_modules/
+argonvale-frontend/dist/
