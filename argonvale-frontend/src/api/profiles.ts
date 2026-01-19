@@ -17,6 +17,8 @@ export interface Profile {
     last_x: number;
     last_y: number;
     last_zone_id: string;
+    title: string;
+    titles_unlocked: string; // JSON string
 }
 
 export interface Companion {
@@ -42,7 +44,7 @@ export const profilesApi = {
         return response.data;
     },
 
-    updateMyProfile: async (data: { bio?: string; avatar_url?: string }): Promise<Profile> => {
+    updateMyProfile: async (data: { bio?: string; avatar_url?: string; title?: string }): Promise<Profile> => {
         const response = await axios.put(`${API_URL}/api/profiles/me`, data, {
             headers: getAuthHeaders()
         });

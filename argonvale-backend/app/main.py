@@ -22,12 +22,13 @@ from app.websocket import router as ws_router
 app.include_router(ws_router.router, tags=["websocket"])
 
 # New API endpoints
-from app.api import profiles, friends, messages, companions, equipment
+from app.api import profiles, friends, messages, companions, equipment, shop
 app.include_router(profiles.router)
 app.include_router(friends.router)
 app.include_router(messages.router)
 app.include_router(companions.router)
 app.include_router(equipment.router)
+app.include_router(shop.router, prefix="/api/shop", tags=["shop"])
 
 @app.get("/")
 def read_root():

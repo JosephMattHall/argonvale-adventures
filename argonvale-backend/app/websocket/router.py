@@ -15,7 +15,7 @@ from app.auth.security import SECRET_KEY, ALGORITHM
 # PSPF Imports
 from pspf.events.base import GameEvent
 from pspf.events.movement import PlayerMoved, LootFound
-from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded
+from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue
 from pspf.events.companion import ChooseStarter, CompanionCreated
 from pspf.processors.exploration import ExplorationProcessor
 from pspf.processors.combat import CombatProcessor
@@ -39,6 +39,7 @@ class GameServer:
         self.exploration = ExplorationProcessor()
         self.combat = CombatProcessor()
         self.management = CompanionManagementProcessor()
+        self.pvp_queue: List[Dict[str, Any]] = [] # [{'user_id', 'websocket', 'companion_id', 'username'}]
         
         # We use a global state container just for the processors signature, 
         # but we will dynamically swap context or pass user-specific state.
@@ -88,6 +89,9 @@ class GameServer:
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
+            user_id = self.active_connections[websocket].user_id
+            # Remove from queue if they disconnect
+            self.pvp_queue = [q for q in self.pvp_queue if q['websocket'] != websocket]
             del self.active_connections[websocket]
 
     async def handle_message(self, websocket: WebSocket, data: str):
@@ -266,6 +270,84 @@ class GameServer:
                 if isinstance(event, (CombatAction)):
                     output_events.extend(self.combat.process(turn_state, event))
 
+                # PvP Matchmaking
+                if isinstance(event, JoinPvPQueue):
+                    if self.pvp_queue:
+                        match = self.pvp_queue.pop(0)
+                        opp_id = match['user_id']
+                        opp_ws = match['websocket']
+                        
+                        combat_id = f"pvp_{random.randint(1000, 9999)}"
+                        
+                        # Load data for both (simple for MVP)
+                        db = SessionLocal()
+                        try:
+                            # We send CombatStarted to BOTH
+                            # This is a bit tricky in the current loop, but we can emit manually
+                            u1 = db.query(User).get(user_id)
+                            u2 = db.query(User).get(opp_id)
+                            c1 = db.query(Companion).filter(Companion.owner_id == user_id, Companion.is_active == True).first()
+                            c2 = db.query(Companion).filter(Companion.owner_id == opp_id, Companion.is_active == True).first()
+                            
+                            if c1 and c2:
+                                # Start PvP Context
+                                context = {
+                                    "mode": "pvp",
+                                    "p1_name": u1.username,
+                                    "p2_name": u2.username,
+                                    "p1_companion": c1.name,
+                                    "p2_companion": c2.name,
+                                    "enemy_name": u2.username, # For the frontend to re-use UI
+                                    "enemy_max_hp": c2.max_hp,
+                                    "enemy_hp": c2.hp,
+                                    "player_max_hp": c1.max_hp,
+                                    "player_hp": c1.hp,
+                                    "companion_id": c1.id,
+                                    "enemy_type": c2.element,
+                                    "companion_name": c1.name,
+                                    "equipped_items": [] # Load these if needed
+                                }
+                                
+                                evt1 = CombatStarted(combat_id=combat_id, attacker_id=user_id, defender_id=opp_id, mode="pvp", context=context)
+                                
+                                # Opposite context for P2
+                                context2 = context.copy()
+                                context2.update({
+                                    "enemy_name": u1.username,
+                                    "enemy_max_hp": c1.max_hp,
+                                    "enemy_hp": c1.hp,
+                                    "player_max_hp": c2.max_hp,
+                                    "player_hp": c2.hp,
+                                    "companion_id": c2.id,
+                                    "enemy_type": c1.element,
+                                    "companion_name": c2.name
+                                })
+                                evt2 = CombatStarted(combat_id=combat_id, attacker_id=opp_id, defender_id=user_id, mode="pvp", context=context2)
+                                
+                                # Send to P2 immediately
+                                import asyncio
+                                asyncio.create_task(opp_ws.send_text(json.dumps([evt2.model_dump()])))
+                                
+                                # Add to output for P1 (current user)
+                                output_events.append(evt1)
+                                
+                                # Register in combat processor
+                                self.combat.process(None, evt1)
+                        finally:
+                            db.close()
+                    else:
+                        db = SessionLocal()
+                        u = db.query(User).get(user_id)
+                        self.pvp_queue.append({
+                            "user_id": user_id,
+                            "websocket": websocket,
+                            "companion_id": event.companion_id,
+                            "username": u.username if u else "Unknown"
+                        })
+                        db.close()
+                        # Notify player they are in queue
+                        await websocket.send_text(json.dumps([{"type": "Info", "message": "Searching for a rival..."}]))
+
             # 4. Feedback Loop & Persistence
             db = SessionLocal()
             try:
@@ -328,16 +410,40 @@ class GameServer:
                                     companion.xp += out_event.xp_gained
                                     # Level up logic: XP >= level * 100
                                     xp_needed = companion.level * 100
-                                    if companion.xp >= xp_needed:
+                                    while companion.xp >= xp_needed: # Support multi-level up
                                         companion.level += 1
                                         companion.xp -= xp_needed
-                                        # Stat increases
-                                        companion.strength += 2
-                                        companion.defense += 2
-                                        companion.speed += 1
-                                        companion.max_hp += 10
+                                        # Automatic Stat Scaling: +1 STR, +1 DEF, +5 HP per level
+                                        companion.strength += 1
+                                        companion.defense += 1
+                                        companion.max_hp += 5
                                         companion.hp = companion.max_hp # Fully heal on level up
+                                        xp_needed = companion.level * 100
+                                    
+                                    # Dropped Item Persistence
+                                    if out_event.dropped_item:
+                                        from app.models.item import Item as DBItem
+                                        new_item = DBItem(
+                                            name=out_event.dropped_item.get("name"),
+                                            item_type=out_event.dropped_item.get("item_type"),
+                                            weapon_stats=out_event.dropped_item.get("stats"),
+                                            owner_id=user_id,
+                                            is_equipped=False
+                                        )
+                                        db.add(new_item)
+                                    
                                     db.commit()
+
+                    if isinstance(out_event, TrainingCompleted):
+                        companion = db.query(Companion).filter(Companion.id == out_event.companion_id).first()
+                        if companion:
+                            if out_event.stat_increased == "strength":
+                                companion.strength += out_event.amount
+                            elif out_event.stat_increased == "defense":
+                                companion.defense += out_event.amount
+                            elif out_event.stat_increased == "speed":
+                                companion.speed += out_event.amount
+                            db.commit()
 
                     if isinstance(out_event, LootFound):
                         # Found coins during exploration

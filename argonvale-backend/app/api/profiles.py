@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 class ProfileUpdate(BaseModel):
     bio: str | None = None
     avatar_url: str | None = None
+    title: str | None = None
 
 class ProfileResponse(BaseModel):
     id: int
@@ -22,6 +23,9 @@ class ProfileResponse(BaseModel):
     last_x: int
     last_y: int
     last_zone_id: str
+    avatar_url: str
+    title: str
+    titles_unlocked: str
     
     class Config:
         from_attributes = True
@@ -59,6 +63,8 @@ def update_my_profile(
         current_user.bio = profile_data.bio
     if profile_data.avatar_url is not None:
         current_user.avatar_url = profile_data.avatar_url
+    if profile_data.title is not None:
+        current_user.title = profile_data.title
     
     db.commit()
     db.refresh(current_user)

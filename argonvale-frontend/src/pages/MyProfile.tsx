@@ -9,6 +9,7 @@ const MyProfile: React.FC = () => {
     const [companions, setCompanions] = useState<Companion[]>([]);
     const [isEditing, setIsEditing] = useState(false);
     const [bio, setBio] = useState('');
+    const [selectedTitle, setSelectedTitle] = useState('');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -20,6 +21,7 @@ const MyProfile: React.FC = () => {
             const profileData = await profilesApi.getMyProfile();
             setProfile(profileData);
             setBio(profileData.bio);
+            setSelectedTitle(profileData.title);
 
             const companionsData = await profilesApi.getUserCompanions(profileData.username);
             setCompanions(companionsData);
@@ -32,7 +34,7 @@ const MyProfile: React.FC = () => {
 
     const handleSave = async () => {
         try {
-            await profilesApi.updateMyProfile({ bio });
+            await profilesApi.updateMyProfile({ bio, title: selectedTitle });
             setIsEditing(false);
             loadProfile();
         } catch (error) {
@@ -71,13 +73,37 @@ const MyProfile: React.FC = () => {
 
                         {/* Info */}
                         <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                                <h2 className="text-2xl font-medieval text-white">{profile.username}</h2>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-col">
+                                    <h2 className="text-2xl font-medieval text-white">{profile.username}</h2>
+                                    <div className="text-secondary font-bold text-xs uppercase tracking-widest">{profile.title}</div>
+                                </div>
                                 <div className="flex items-center gap-4 bg-dark rounded-full px-4 py-1.5 border border-gold/20 shadow-glow-gold/10">
                                     <Coins size={18} className="text-gold" />
                                     <span className="font-bold text-gold">{profile.coins}</span>
                                 </div>
                             </div>
+
+                            {/* Title Selection */}
+                            {isEditing && (
+                                <div className="mb-6 bg-dark/30 p-4 rounded-lg border border-white/5">
+                                    <label className="text-sm text-gray-400 uppercase tracking-wide">Select Your Title</label>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {JSON.parse(profile.titles_unlocked || '["Novice Adventurer"]').map((t: string) => (
+                                            <button
+                                                key={t}
+                                                onClick={() => setSelectedTitle(t)}
+                                                className={`px-3 py-1 rounded-full border text-xs font-bold transition-all ${selectedTitle === t
+                                                        ? 'bg-secondary/20 border-secondary text-secondary shadow-glow'
+                                                        : 'bg-dark border-white/10 text-gray-400 hover:border-gray-500'
+                                                    }`}
+                                            >
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Bio */}
                             <div className="mt-4">

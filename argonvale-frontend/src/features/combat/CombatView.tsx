@@ -3,6 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Shield, Sword, Zap, Flame } from 'lucide-react';
 import { useGameSocket } from '../../hooks/useGameSocket';
 import type { Item } from '../../api/equipment';
+import { soundManager } from '../../utils/SoundManager';
+
+interface FloatingDamage {
+    id: number;
+    value: number | string;
+    x: number;
+    y: number;
+    type: 'player' | 'enemy' | 'crit';
+}
 
 interface BattleContext {
     enemy_name: string;
@@ -56,6 +65,9 @@ const CombatView: React.FC = () => {
     const [equippedItems] = useState<Item[]>(context.equipped_items);
     const [activeTab, setActiveTab] = useState<'weapons' | 'items'>('weapons');
     const [xpGained, setXpGained] = useState(0);
+    const [floatingDamage, setFloatingDamage] = useState<FloatingDamage[]>([]);
+    const [playerAnimating, setPlayerAnimating] = useState<string | null>(null);
+    const [enemyAnimating, setEnemyAnimating] = useState<string | null>(null);
 
     useEffect(() => {
         const combatEvents = messages.filter((m: any) =>
@@ -73,6 +85,50 @@ const CombatView: React.FC = () => {
             combatEvents.forEach((msg: any) => {
                 if (msg.type === 'TurnProcessed') {
                     newLogs.push(msg.description);
+
+                    // Logic For Visual Feedback
+                    if (msg.damage_dealt > 0) {
+                        const isEnemyHit = msg.actor_id !== 0; // If actor is user (not 0), enemy is hit
+                        if (isEnemyHit) {
+                            setEnemyAnimating('animate-shake animate-flash-red');
+                            setTimeout(() => setEnemyAnimating(null), 500);
+                            soundManager.play('hit');
+                            addFloatingDamage(msg.damage_dealt, 'enemy', msg.description.includes('CRITICAL'));
+                        } else {
+                            setPlayerAnimating('animate-shake animate-flash-red');
+                            setTimeout(() => setPlayerAnimating(null), 500);
+                            soundManager.play('hit');
+                            addFloatingDamage(msg.damage_dealt, 'player', msg.description.includes('CRITICAL'));
+                        }
+                    } else if (msg.description.includes('block') || msg.description.includes('defensive')) {
+                        const isEnemyBlock = msg.actor_id !== 0; // If actor is user, enemy blocks (or user blocks?)
+                        // Wait, if actor_id is user (1), the enemy is the one being attacked. 
+                        // If it's a block, the defender is blocking.
+                        if (isEnemyBlock) {
+                            setEnemyAnimating('animate-block-shake');
+                            setTimeout(() => setEnemyAnimating(null), 500);
+                        } else {
+                            setPlayerAnimating('animate-block-shake');
+                            setTimeout(() => setPlayerAnimating(null), 500);
+                        }
+                        soundManager.play('block');
+                    } else if (msg.description.includes('restore') || msg.description.includes('heal')) {
+                        const isEnemyHeal = msg.actor_id === 0;
+                        if (isEnemyHeal) {
+                            setEnemyAnimating('animate-heal-pulse');
+                            setTimeout(() => setEnemyAnimating(null), 800);
+                        } else {
+                            setPlayerAnimating('animate-heal-pulse');
+                            setTimeout(() => setPlayerAnimating(null), 800);
+                        }
+                    }
+
+                    // Trigger lunges for actors
+                    if (msg.actor_id === 0 && (msg.damage_dealt > 0 || msg.description.includes('attack'))) {
+                        setEnemyAnimating(prev => prev ? `${prev} animate-lunge-left` : 'animate-lunge-left');
+                        setTimeout(() => setEnemyAnimating(null), 400);
+                    }
+
                     lasthp = msg.attacker_hp;
                     lastEnemyHp = msg.defender_hp;
                 }
@@ -80,6 +136,7 @@ const CombatView: React.FC = () => {
                     over = true;
                     res = (msg.winner_id !== 0) ? 'win' : 'loss';
                     xp = msg.xp_gained || 0;
+                    if (res === 'win') soundManager.play('levelUp');
                 }
             });
 
@@ -105,8 +162,24 @@ const CombatView: React.FC = () => {
             stance: currentStance,
             weapon_ids: selectedWeapons
         });
+        setPlayerAnimating('animate-lunge-right');
+        setTimeout(() => setPlayerAnimating(null), 400);
+        soundManager.play('attack');
+    };
 
-        // Selection persists for next turn as requested
+    const addFloatingDamage = (val: number, type: 'player' | 'enemy', isCrit: boolean) => {
+        const id = Date.now();
+        const dmg: FloatingDamage = {
+            id,
+            value: isCrit ? `CRIT ${val}` : val,
+            x: type === 'enemy' ? 70 + Math.random() * 10 : 20 + Math.random() * 10,
+            y: 40 + Math.random() * 10,
+            type: isCrit ? 'crit' : type
+        };
+        setFloatingDamage(prev => [...prev, dmg]);
+        setTimeout(() => {
+            setFloatingDamage(prev => prev.filter(d => d.id !== id));
+        }, 1000);
     };
 
     const handleUseItem = (itemId: number) => {
@@ -119,6 +192,8 @@ const CombatView: React.FC = () => {
             action_type: "use_item",
             item_id: itemId
         });
+        setPlayerAnimating('animate-heal-pulse');
+        setTimeout(() => setPlayerAnimating(null), 800);
     };
 
     const toggleWeapon = (id: number) => {
@@ -163,9 +238,17 @@ const CombatView: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
 
                 {/* Player Side */}
-                <div className="text-center z-10 transition-transform hover:scale-105 duration-300">
-                    <div className="w-32 h-32 bg-primary/20 rounded-2xl mb-4 mx-auto border-2 border-primary flex items-center justify-center shadow-glow animate-pulse">
-                        <span className="text-6xl">🐾</span>
+                <div className={`text-center z-10 transition-all duration-300 ${playerAnimating}`}>
+                    <div className="relative group">
+                        <div className="w-32 h-32 bg-primary/20 rounded-2xl mb-4 mx-auto border-2 border-primary flex items-center justify-center shadow-glow overflow-hidden relative">
+                            {/* Inner Glow/Aura */}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-transparent to-primary/20 animate-pulse" />
+                            <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">🐾</span>
+                            {/* Elemental Overlay based on name or type if available */}
+                            <div className="absolute bottom-1 right-1 bg-dark/80 rounded-full p-1 border border-primary/30">
+                                <Zap size={14} className="text-gold" />
+                            </div>
+                        </div>
                     </div>
                     <div className="font-medieval mb-2 text-primary text-2xl tracking-wide uppercase">
                         {context.companion_name}
@@ -179,7 +262,21 @@ const CombatView: React.FC = () => {
                     <div className="text-sm mt-2 font-mono text-white font-bold">{playerHp} / {playerMaxHp} HP</div>
                 </div>
 
-                {/* VS Center */}
+                {/* VS Center & Floating Damage Overlay */}
+                <div className="absolute inset-0 pointer-events-none z-50">
+                    {floatingDamage.map(dmg => (
+                        <div
+                            key={dmg.id}
+                            className={`absolute animate-float-up font-bold text-3xl drop-shadow-md select-none ${dmg.type === 'enemy' ? 'text-red-500' :
+                                dmg.type === 'crit' ? 'text-gold text-5xl italic scale-125' : 'text-neutral-200'
+                                }`}
+                            style={{ left: `${dmg.x}%`, top: `${dmg.y}%` }}
+                        >
+                            {dmg.value}
+                        </div>
+                    ))}
+                </div>
+
                 <div className="flex flex-col items-center gap-2 lg:gap-4 order-first md:order-none mb-6 md:mb-0">
                     <div className="text-2xl md:text-4xl font-black italic tracking-tighter text-white/5 uppercase select-none">Argonvale Fight</div>
                     <div className="text-4xl md:text-6xl font-medieval text-gold animate-bounce drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">VS</div>
@@ -187,13 +284,21 @@ const CombatView: React.FC = () => {
                 </div>
 
                 {/* Enemy Side */}
-                <div className="text-center z-10 transition-transform hover:scale-105 duration-300">
-                    <div className="w-32 h-32 bg-red-500/20 rounded-2xl mb-4 mx-auto border-2 border-red-500/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-                        <span className="text-6xl">
-                            {context.enemy_type === 'Fire' ? '🔥' :
-                                context.enemy_type === 'Water' ? '💧' :
-                                    context.enemy_type === 'Earth' ? '🗿' : '👹'}
-                        </span>
+                <div className={`text-center z-10 transition-all duration-300 ${enemyAnimating}`}>
+                    <div className="relative group">
+                        <div className="w-32 h-32 bg-red-500/20 rounded-2xl mb-4 mx-auto border-2 border-red-500/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.2)] overflow-hidden relative">
+                            {/* Inner Glow/Aura */}
+                            <div className="absolute inset-0 bg-gradient-to-bl from-red-500/20 via-transparent to-red-500/20 animate-pulse" />
+                            <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">
+                                {context.enemy_type === 'Fire' ? '🔥' :
+                                    context.enemy_type === 'Water' ? '💧' :
+                                        context.enemy_type === 'Earth' ? '🗿' : '👹'}
+                            </span>
+                            {/* Elemental Overlay */}
+                            <div className="absolute top-1 left-1 bg-dark/80 rounded-full p-1 border border-red-500/30">
+                                <Flame size={14} className="text-red-400" />
+                            </div>
+                        </div>
                     </div>
                     <div className="font-medieval mb-2 text-red-500 text-2xl tracking-wide uppercase">{context.enemy_name}</div>
                     <div className="w-48 h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">

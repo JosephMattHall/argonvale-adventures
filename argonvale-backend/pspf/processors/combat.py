@@ -72,11 +72,26 @@ class CombatProcessor(BaseProcessor):
             log = ""
 
             if event.action_type == "use_item":
-                # In a real system, we'd verify item_id in DB.
-                # For MVP, if it's a potion-like ID or just using the action restores HP.
-                restore_amt = 40
-                session.player_hp = min(session.player_hp + restore_amt, session.player_max_hp)
-                log = f"Using a healing scroll, you restore {restore_amt} HP!"
+                # Find the item in the companion's equipped items or inventory
+                # For this turn, we look it up from the 'context' or session data.
+                item = next((i for i in session.equipped_items if i.get("id") == event.item_id), None)
+                
+                if item:
+                    item_stats = item.get("stats", {})
+                    restore_amt = 0
+                    
+                    if "heal" in item_stats:
+                        restore_amt = item_stats["heal"]
+                    elif "heal_pct" in item_stats:
+                        restore_amt = int(session.player_max_hp * (item_stats["heal_pct"] / 100))
+                    
+                    session.player_hp = min(session.player_hp + restore_amt, session.player_max_hp)
+                    log = f"Using {item.get('name')}, you restore {restore_amt} HP!"
+                else:
+                    # Fallback for manual testing or old data
+                    restore_amt = 40
+                    session.player_hp = min(session.player_hp + restore_amt, session.player_max_hp)
+                    log = f"Using a healing scroll, you restore {restore_amt} HP!"
             else:
                 # Default: Attack
                 # Base stats from companion
@@ -144,10 +159,18 @@ class CombatProcessor(BaseProcessor):
             if session.enemy_hp <= 0:
                 # XP Calculation: (Enemy STR * 2) + 10
                 xp_gain = (session.enemy_stats.get("STR", 5) * 2) + 10
+                
+                # Loot Drops: 25% chance for a random item from their own pool (if they have items)
+                # OR a random tier 1 item. For now, let's drop one of THEIR items if they have any.
+                dropped = None
+                if random.random() < 0.25 and session.enemy_items:
+                    dropped = random.choice(session.enemy_items)
+                
                 events.append(CombatEnded.create(
                     combat_id=session.combat_id,
                     winner_id=event.actor_id,
-                    loot={"coins": random.randint(10, 25)},
+                    loot={"coins": random.randint(15, 30)},
+                    dropped_item=dropped,
                     xp_gained=xp_gain
                 ))
                 del self.sessions[session.combat_id]

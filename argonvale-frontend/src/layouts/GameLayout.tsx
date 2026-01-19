@@ -7,7 +7,8 @@ import {
     Package,
     Users,
     TrendingUp,
-    Compass
+    Compass,
+    ShoppingCart
 } from 'lucide-react';
 import CompanionsView from '../features/companions/CompanionsView';
 import CompanionCreation from '../features/companions/CompanionCreation';
@@ -16,6 +17,7 @@ import CombatView from '../features/combat/CombatView';
 import TrainingView from '../features/training/TrainingView';
 import InventoryView from '../features/inventory/InventoryView';
 import ExplorationView from '../features/exploration/ExplorationView';
+import ShopView from '../features/shop/ShopView';
 import MyProfile from '../pages/MyProfile';
 import UserProfile from '../pages/UserProfile';
 import Messages from '../pages/Messages';
@@ -61,6 +63,9 @@ const GameLayout: React.FC = () => {
                         <Link to="/game/inventory" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
                             <Package size={18} className="text-gold" /> Inventory
                         </Link>
+                        <Link to="/game/shop" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
+                            <ShoppingCart size={18} className="text-warning" /> Shop
+                        </Link>
                         <Link to="/game/train" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
                             <TrendingUp size={18} className="text-primary" /> Training
                         </Link>
@@ -86,7 +91,7 @@ const GameLayout: React.FC = () => {
                             <Route path="battle" element={<CombatView />} />
                             <Route path="companions" element={<CompanionsView />} />
                             <Route path="companions/create" element={<CompanionCreation />} />
-                            <Route path="shop" element={<div className="p-8 text-center text-gray-400">Coming Soon</div>} />
+                            <Route path="shop" element={<ShopView />} />
                             <Route path="train" element={<TrainingView />} />
                             <Route path="inventory" element={<InventoryView />} />
                             <Route path="explore" element={<ExplorationView />} />
@@ -129,6 +134,10 @@ const GameLayout: React.FC = () => {
                 <Link to="/game/inventory" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
                     <Package size={20} className="text-gold" />
                     <span className="text-[10px] uppercase font-bold">Bag</span>
+                </Link>
+                <Link to="/game/shop" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+                    <ShoppingCart size={20} className="text-warning" />
+                    <span className="text-[10px] uppercase font-bold">Shop</span>
                 </Link>
                 <Link to="/game/train" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
                     <TrendingUp size={20} className="text-primary" />

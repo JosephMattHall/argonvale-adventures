@@ -10,7 +10,7 @@ import logo from '../assets/logo.png';
 const Navbar: React.FC = () => {
     const { logout, isAuthenticated } = useAuth();
     const { profile, updateProfile } = useUser();
-    const { unreadCount } = useNotifications();
+    const { } = useNotifications();
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -31,19 +31,6 @@ const Navbar: React.FC = () => {
                     />
                 </Link>
                 <div className="h-6 w-px bg-border-subtle mx-2"></div>
-                <nav className="flex items-center gap-4">
-                    <Link to="/game/explore" className="text-gray-300 hover:text-white transition-colors">Play</Link>
-                    <Link to="/game/companions" className="text-gray-300 hover:text-white transition-colors">Companions</Link>
-                    <Link to="/game/profile/me" className="text-gray-300 hover:text-white transition-colors">Profile</Link>
-                    <Link to="/game/messages" className="text-gray-300 hover:text-white transition-colors flex items-center gap-2">
-                        Messages
-                        {unreadCount > 0 && (
-                            <span className="bg-danger text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                {unreadCount}
-                            </span>
-                        )}
-                    </Link>
-                </nav>
             </div>
 
             <div className="flex items-center gap-6">

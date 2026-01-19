@@ -4,7 +4,7 @@ import { useUser } from '../../context/UserContext';
 import { profilesApi, type Companion } from '../../api/profiles';
 import { equipmentApi, type Item } from '../../api/equipment';
 import { useGameSocket } from '../../hooks/useGameSocket';
-import { Swords, ChevronRight, Shield, Heart } from 'lucide-react';
+import { Swords, ChevronRight, Shield, Heart, Zap } from 'lucide-react';
 
 const OPPONENTS = [
     {
@@ -115,6 +115,7 @@ const BattleSelection: React.FC = () => {
     const [selectedCompanionId, setSelectedCompanionId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [isStarting, setIsStarting] = useState(false);
+    const [isQueuing, setIsQueuing] = useState(false);
     const [initialMsgCount, setInitialMsgCount] = useState(0);
 
     useEffect(() => {
@@ -143,6 +144,7 @@ const BattleSelection: React.FC = () => {
         const combatStarted = newMessages.find((m: any) => m.type === 'CombatStarted' && m.attacker_id === profile?.id);
         if (combatStarted) {
             setIsStarting(false);
+            setIsQueuing(false);
             navigate('/game/battle', { state: { battleContext: combatStarted.context, combatId: combatStarted.combat_id } });
         }
     }, [messages, profile, navigate, isStarting, initialMsgCount]);
@@ -157,6 +159,16 @@ const BattleSelection: React.FC = () => {
         sendCommand({
             type: "EnterCombat",
             opponent,
+            companion_id: selectedCompanionId
+        });
+    };
+
+    const handleJoinQueue = () => {
+        if (selectedCompanionId === null) return;
+        setIsQueuing(true);
+        setInitialMsgCount(messages.length);
+        sendCommand({
+            type: "JoinPvPQueue",
             companion_id: selectedCompanionId
         });
     };
@@ -244,14 +256,25 @@ const BattleSelection: React.FC = () => {
                     </div>
 
                     <div className="sticky bottom-0 lg:static bg-dark lg:bg-transparent py-4 lg:py-0">
-                        <button
-                            disabled={selectedOpponent === null || selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting}
-                            onClick={handleStartBattle}
-                            className="btn-primary w-full py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-glow-primary/20"
-                        >
-                            <Swords />
-                            {isStarting ? 'Entering Arena...' : selectedCompanion?.hp === 0 ? 'Heal Companion First!' : 'Enter Combat'}
-                        </button>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <button
+                                disabled={selectedOpponent === null || selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting || isQueuing}
+                                onClick={handleStartBattle}
+                                className="btn-primary flex-1 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-glow-primary/20"
+                            >
+                                <Swords />
+                                {isStarting ? 'Entering Arena...' : selectedCompanion?.hp === 0 ? 'Heal Companion First!' : 'Enter Combat'}
+                            </button>
+
+                            <button
+                                disabled={selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting || isQueuing}
+                                onClick={handleJoinQueue}
+                                className="btn-gold flex-1 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-glow-gold/20"
+                            >
+                                <Zap className={isQueuing ? 'animate-spin' : ''} />
+                                {isQueuing ? 'Searching for Rivals...' : 'Queue for PvP'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

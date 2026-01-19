@@ -14,6 +14,8 @@ class User(Base):
     coins = Column(Integer, default=0)
     bio = Column(String, default="")
     avatar_url = Column(String, default="default_avatar.png")  # 50x50px
+    title = Column(String, default="Novice Adventurer")
+    titles_unlocked = Column(String, default="[\"Novice Adventurer\"]") # JSON list
     last_active = Column(String, default="")  # ISO format timestamp
     mail_preference = Column(String, default="everyone")  # 'friends' or 'everyone'
     has_starter = Column(Boolean, default=False)  # Whether user has selected starter companion

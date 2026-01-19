@@ -30,4 +30,9 @@ class CombatEnded(GameEvent):
     combat_id: str
     winner_id: int
     loot: Optional[Dict[str, Any]] = None
+    dropped_item: Optional[Dict[str, Any]] = None # Item template data
     xp_gained: int = 0
+
+class JoinPvPQueue(GameEvent):
+    player_id: int
+    companion_id: int

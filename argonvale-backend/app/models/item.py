@@ -12,6 +12,7 @@ class Item(Base):
     # Stores the JSON representation of app.schemas.items.WeaponStats
     # e.g. {"attack": {"fire": 10}, "reflection": {"fire": 0.5}}
     weapon_stats = Column(JSON, default={})
+    price = Column(Integer, default=0)
     is_equipped = Column(Boolean, default=False)
 
     owner_id = Column(Integer, ForeignKey("users.id"))
