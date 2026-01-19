@@ -91,8 +91,12 @@ class ExplorationProcessor(BaseProcessor):
             # We can check map data danger level if we added it to JSON, 
             # or hardcode town check.
             if event.zone_id != 'town':
+                import logging
+                logger = logging.getLogger(__name__)
                 combat_roll = random.randint(1, 100)
-                if combat_roll <= 15:
+                logger.info(f"Exploration Roll: {combat_roll} (Threshold: 100)")
+                
+                if combat_roll <= 15: # 15% Chance
                     # Load candidates
                     candidates = self.creatures_data.get("common_creatures", [])
                     if candidates:

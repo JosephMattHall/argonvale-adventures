@@ -491,9 +491,10 @@ class GameServer:
                                 user.coins += out_event.coins_found
                                 db.commit()
                         
-                    # Logic Loop: Combat Started (Already handled in Exploration above for random encounters)
-                    # if isinstance(out_event, CombatStarted):
-                    #    self.combat.process(turn_state, out_event)
+                    # Logic Loop: Combat Started (Now handled for random encounters to register session)
+                    if isinstance(out_event, CombatStarted):
+                       logger.info(f"Auto-registering random encounter session: {out_event.combat_id}")
+                       self.combat.process(turn_state, out_event)
 
                         
             except Exception as e:

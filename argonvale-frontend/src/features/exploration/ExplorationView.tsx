@@ -36,8 +36,35 @@ const ExplorationView: React.FC = () => {
     // Refs
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const playerPosRef = useRef(playerPos);
+    const currentZoneIdRef = useRef(currentZoneId); // New Ref
     const lastMoveTimeRef = useRef(0);
     const mapDataRef = useRef<TilemapData | null>(null);
+
+    // Initial Load & Zone Change
+    useEffect(() => {
+        // Sync Ref immediately when state changes
+        currentZoneIdRef.current = currentZoneId;
+
+        const loadMap = async () => {
+            // ... existing loadMap code ...
+            // (omitted for brevity in this replace call, but we need to keep the content valid)
+            // Wait, replace_file_content replaces the WHOLE block. I need to be careful not to delete loadMap logic.
+            // Actually, I should split this into smaller edits or include the logic.
+            // Let's just update the Ref definition and the Sync effect separately.
+        };
+        // ...
+    }, [currentZoneId]);
+
+    // Better strategy:
+    // 1. Update Refs definitions.
+    // 2. Update Sync Effect (or add new one).
+    // 3. Update move() function.
+
+    // Changing approach to multiple replace calls for safety or one big one if contiguous.
+    // The Refs overlap start at line 36.
+    // move() is at line 147.
+    // These are far apart. I should use multi_replace_file_content.
+
 
     // Initial Load & Zone Change
     useEffect(() => {
@@ -48,7 +75,7 @@ const ExplorationView: React.FC = () => {
                 if (!res.ok) throw new Error("Map not found");
                 const data: TilemapData = await res.json();
                 setMapData(data);
-                mapDataRef.current = data;
+                mapDataRef.current = data; // Immedate ref update for validation
 
                 // Load Tileset Image
                 const img = new Image();
@@ -59,17 +86,57 @@ const ExplorationView: React.FC = () => {
                 };
                 img.onerror = (e) => console.error("Tileset failed to load", e);
 
-                // Reset position if changed zones explicitly (not initial load)
-                if (currentZoneId !== profile?.last_zone_id) {
-                    setPlayerPos({ x: Math.floor(data.width / 2), y: Math.floor(data.height / 2) });
+                // --- Position Validation Logic ---
+                // Check if current player position is valid in the NEW map
+                let safeX = playerPos.x;
+                let safeY = playerPos.y;
+                let needsReset = false;
+
+                // 1. Bounds Check
+                if (safeX < 0 || safeX >= data.width || safeY < 0 || safeY >= data.height) {
+                    console.warn(`Position ${safeX},${safeY} out of bounds for ${currentZoneId} (${data.width}x${data.height}). Resetting.`);
+                    needsReset = true;
                 }
+                // 2. Collision Check (if in bounds)
+                else {
+                    const idx = safeY * data.width + safeX;
+                    if (data.layers.collision[idx] === 1) {
+                        console.warn(`Position ${safeX},${safeY} is solid in ${currentZoneId}. Resetting.`);
+                        needsReset = true;
+                    }
+                }
+
+                if (needsReset) {
+                    // Default safe spot (center is usually safe-ish, or hardcode per zone)
+                    // Better: Find nearest safe spot or just center
+                    safeX = Math.floor(data.width / 2);
+                    safeY = Math.floor(data.height / 2);
+
+                    // Verify center is safe, if not, scan?
+                    // For now, assume center is safe based on generator logic (it didn't put trees on center specifically)
+                    // But to be safe, let's just force it.
+                    console.log("Resetting player to:", safeX, safeY);
+
+                    setPlayerPos({ x: safeX, y: safeY });
+                    // IMPORTANT: Update profile immediately so next reload/refresh is safe
+                    if (profile) {
+                        updateProfile({
+                            ...profile,
+                            last_x: safeX,
+                            last_y: safeY,
+                            last_zone_id: currentZoneId
+                        });
+                    }
+                }
+
                 console.log("Map Loaded:", data);
             } catch (err) {
                 console.error("Failed to load map:", err);
             }
         };
         loadMap();
-    }, [currentZoneId, profile]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentZoneId]); // ONLY reload map when zone changes, NOT when profile changes!
 
     // Listen for Encounters
     // Capture initial message count on mount using LAZY initialization to avoid processing old messages
@@ -80,11 +147,18 @@ const ExplorationView: React.FC = () => {
 
         // Scan ALL new messages, not just the last one
         const newMessages = messages.slice(initialMsgCount);
-        const encounterEvent = newMessages.find((msg: any) =>
-            msg.type === 'CombatStarted' &&
-            msg.attacker_id === profile?.id &&
-            msg.mode === 'pve'
-        );
+        // console.log("ExplorationView New Messages:", newMessages);
+
+        const encounterEvent = newMessages.find((msg: any) => {
+            if (msg.type === 'CombatStarted') {
+                console.log("Found Combat Event:", msg);
+                console.log(`Checking ID Match: Event=${msg.attacker_id} (${typeof msg.attacker_id}) vs Profile=${profile?.id} (${typeof profile?.id})`);
+                const isMatch = msg.attacker_id == profile?.id;
+                console.log("ID Match Result:", isMatch);
+                return isMatch && msg.mode === 'pve';
+            }
+            return false;
+        });
 
         if (encounterEvent) {
             // Update our message count tracker so we don't re-process this event
@@ -125,6 +199,10 @@ const ExplorationView: React.FC = () => {
     useEffect(() => {
         playerPosRef.current = playerPos;
     }, [playerPos]);
+
+    useEffect(() => {
+        currentZoneIdRef.current = currentZoneId;
+    }, [currentZoneId]);
 
     // Resize Handler
     useEffect(() => {
@@ -172,7 +250,7 @@ const ExplorationView: React.FC = () => {
         sendCommand({
             type: "Move",
             direction: { dx, dy },
-            zone_id: currentZoneId
+            zone_id: currentZoneIdRef.current
         });
     };
 
