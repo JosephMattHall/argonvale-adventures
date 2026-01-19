@@ -3,6 +3,7 @@
     {
       "name": "Emberfang",
       "type": "Fire",
+      "image_url": "emberfang.png",
       "role": "Damage Dealer",
       "description": "Wolf-like ember creature with glowing veins, fast and aggressive.",
       "level": 1,
@@ -27,6 +28,7 @@
     {
       "name": "Stoneback Tortoise",
       "type": "Earth",
+      "image_url": "stoneback_tortoise.png",
       "role": "Defensive Tank",
       "description": "A sturdy tortoise with a shell made of living rock.",
       "level": 1,
@@ -51,6 +53,7 @@
     {
       "name": "Galehorn Raptor",
       "type": "Wind",
+      "image_url": "galehorn_raptor.png",
       "role": "Tactical Striker",
       "description": "A feathered reptile with hollow bones, moving swift as the wind.",
       "level": 1,
@@ -75,6 +78,7 @@
     {
       "name": "Umbraclaw",
       "type": "Shadow",
+      "image_url": "umbraclaw.png",
       "role": "Specialist",
       "description": "A mysterious feline composed of shifting shadows and faint whispers.",
       "level": 1,
@@ -99,6 +103,7 @@
     {
       "name": "Tidemaw Serpent",
       "type": "Water",
+      "image_url": "tidemaw_serpent.png",
       "role": "Bruiser",
       "description": "A small sea-serpent capable of moving on land with a magical water veil.",
       "level": 1,

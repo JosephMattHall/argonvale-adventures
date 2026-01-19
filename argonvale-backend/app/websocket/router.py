@@ -202,8 +202,10 @@ class GameServer:
                             "enemy_stats": opponent.get("stats", {"STR": 5, "DEF": 2}),
                             "enemy_weapons": opponent.get("weapons", []),
                             "enemy_items": opponent.get("items", []),
+                            "enemy_image": opponent.get("image_url", "default_companion.png"),
                             "companion_id": companion.id,
                             "companion_name": companion.name,
+                            "companion_image": companion.image_url,
                             "player_hp": companion.hp,
                             "player_max_hp": companion.max_hp,
                             "player_stats": {
@@ -251,7 +253,10 @@ class GameServer:
                                     equipped_items = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats} for i in equipped_items_db]
                                     
                                     out_evt.context.update({
+                                        "enemy_image": out_evt.context.get("enemy_image", "default_enemy.png"), # Ensure enemy image is present
                                         "companion_id": active_companion.id,
+                                        "companion_name": active_companion.name,
+                                        "companion_image": active_companion.image_url,
                                         "player_hp": active_companion.hp,
                                         "player_max_hp": active_companion.max_hp,
                                         "player_stats": {

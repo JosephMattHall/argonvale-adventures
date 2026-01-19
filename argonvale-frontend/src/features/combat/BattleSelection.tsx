@@ -9,6 +9,7 @@ import { Swords, ChevronRight, Shield, Heart, Zap } from 'lucide-react';
 const OPPONENTS = [
     {
         name: "Wild Emberfang", species: "Emberfang", type: "Fire",
+        image_url: "/companions/emberfang.png",
         stats: { STR: 12, DEF: 8, HP: 60 },
         weapons: [
             { name: "Spark Staff", stats: { atk: { fire: 6, light: 2 } } },
@@ -25,6 +26,7 @@ const OPPONENTS = [
     },
     {
         name: "Ancient Stoneback", species: "Stoneback Tortoise", type: "Earth",
+        image_url: "/companions/stoneback_tortoise.png",
         stats: { STR: 10, DEF: 20, HP: 100 },
         weapons: [
             { name: "Stone Shield", stats: { def: { earth: 12 } } },
@@ -41,6 +43,7 @@ const OPPONENTS = [
     },
     {
         name: "Storm Raptor", species: "Galehorn Raptor", type: "Wind",
+        image_url: "/companions/galehorn_raptor.png",
         stats: { STR: 18, DEF: 6, HP: 55 },
         weapons: [
             { name: "Stormcaller Bow", stats: { atk: { wind: 15 } } },
@@ -57,6 +60,7 @@ const OPPONENTS = [
     },
     {
         name: "Tidal Serpent", species: "Tidemaw Serpent", type: "Water",
+        image_url: "/companions/tidemaw_serpent.png",
         stats: { STR: 14, DEF: 14, HP: 75 },
         weapons: [
             { name: "Corsair's Cutlass", stats: { atk: { phys: 14, water: 6 } } },
@@ -73,6 +77,7 @@ const OPPONENTS = [
     },
     {
         name: "Void Umbraclaw", species: "Umbraclaw", type: "Shadow",
+        image_url: "/companions/umbraclaw.png",
         stats: { STR: 20, DEF: 10, HP: 70 },
         weapons: [
             { name: "Executioner's Axe", stats: { atk: { shadow: 15 } } },
@@ -89,6 +94,7 @@ const OPPONENTS = [
     },
     {
         name: "System Overlord", species: "Computer", type: "Digital",
+        image_url: "/companions/default_companion.png",
         stats: { STR: 25, DEF: 20, HP: 200 },
         weapons: [
             { name: "Binary Blade", stats: { atk: { light: 25 } } },
@@ -199,8 +205,8 @@ const BattleSelection: React.FC = () => {
                                         ${selectedCompanionId === comp.id ? 'border-primary bg-primary/10' : 'hover:bg-white/5'}
                                     `}
                                 >
-                                    <div className="w-12 h-12 bg-dark rounded-lg flex items-center justify-center text-2xl">
-                                        {comp.image_url ? <img src={comp.image_url} alt="" className="w-full h-full object-cover rounded shadow" /> : '👤'}
+                                    <div className="w-12 h-12 bg-dark rounded-lg flex items-center justify-center text-2xl overflow-hidden border border-white/10 shadow-inner">
+                                        {comp.image_url ? <img src={`/companions/${comp.image_url}`} alt="" className="w-full h-full object-cover" /> : '👤'}
                                     </div>
                                     <div className="flex-1">
                                         <div className="font-bold text-white text-sm">{comp.name}</div>
@@ -242,8 +248,9 @@ const BattleSelection: React.FC = () => {
                                 `}
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-black/20 rounded-full flex items-center justify-center text-2xl shadow-inner">
-                                        {opp.type === 'Fire' ? '🔥' : opp.type === 'Water' ? '💧' : opp.type === 'Earth' ? '🗿' : '👹'}
+                                    <div className="w-12 h-12 bg-black/20 rounded-lg flex items-center justify-center text-2xl shadow-inner overflow-hidden border border-white/5">
+                                        {opp.image_url ? <img src={opp.image_url} alt="" className="w-full h-full object-cover" /> :
+                                            (opp.type === 'Fire' ? '🔥' : opp.type === 'Water' ? '💧' : opp.type === 'Earth' ? '🗿' : '👹')}
                                     </div>
                                     <div>
                                         <div className="font-medieval text-white">{opp.name}</div>

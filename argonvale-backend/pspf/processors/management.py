@@ -48,6 +48,7 @@ class CompanionManagementProcessor(BaseProcessor):
                 name=choice["name"], # Default name = species name
                 species=choice["name"],
                 element=choice["type"],
+                image_url=choice.get("image_url", "default_companion.png"),
                 stats={
                     "str": stat_block["STR"],
                     "def": stat_block["DEF"]

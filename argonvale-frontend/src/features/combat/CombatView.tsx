@@ -18,10 +18,12 @@ interface BattleContext {
     enemy_hp: number;
     enemy_max_hp: number;
     enemy_type: string;
+    enemy_image?: string;
     player_hp: number;
     player_max_hp: number;
     companion_id: number;
     companion_name: string;
+    companion_image?: string;
     companion_stats: {
         str: number;
         def: number;
@@ -243,9 +245,13 @@ const CombatView: React.FC = () => {
                         <div className="w-32 h-32 bg-primary/20 rounded-2xl mb-4 mx-auto border-2 border-primary flex items-center justify-center shadow-glow overflow-hidden relative">
                             {/* Inner Glow/Aura */}
                             <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-transparent to-primary/20 animate-pulse" />
-                            <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">🐾</span>
+                            {context.companion_image ? (
+                                <img src={`/companions/${context.companion_image}`} alt="" className="w-full h-full object-cover z-10" />
+                            ) : (
+                                <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">🐾</span>
+                            )}
                             {/* Elemental Overlay based on name or type if available */}
-                            <div className="absolute bottom-1 right-1 bg-dark/80 rounded-full p-1 border border-primary/30">
+                            <div className="absolute bottom-1 right-1 bg-dark/80 rounded-full p-1 border border-primary/30 z-20">
                                 <Zap size={14} className="text-gold" />
                             </div>
                         </div>
@@ -289,13 +295,17 @@ const CombatView: React.FC = () => {
                         <div className="w-32 h-32 bg-red-500/20 rounded-2xl mb-4 mx-auto border-2 border-red-500/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.2)] overflow-hidden relative">
                             {/* Inner Glow/Aura */}
                             <div className="absolute inset-0 bg-gradient-to-bl from-red-500/20 via-transparent to-red-500/20 animate-pulse" />
-                            <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">
-                                {context.enemy_type === 'Fire' ? '🔥' :
-                                    context.enemy_type === 'Water' ? '💧' :
-                                        context.enemy_type === 'Earth' ? '🗿' : '👹'}
-                            </span>
+                            {context.enemy_image ? (
+                                <img src={context.enemy_image.startsWith('/') ? context.enemy_image : `/companions/${context.enemy_image}`} alt="" className="w-full h-full object-cover z-10" />
+                            ) : (
+                                <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">
+                                    {context.enemy_type === 'Fire' ? '🔥' :
+                                        context.enemy_type === 'Water' ? '💧' :
+                                            context.enemy_type === 'Earth' ? '🗿' : '👹'}
+                                </span>
+                            )}
                             {/* Elemental Overlay */}
-                            <div className="absolute top-1 left-1 bg-dark/80 rounded-full p-1 border border-red-500/30">
+                            <div className="absolute top-1 left-1 bg-dark/80 rounded-full p-1 border border-red-500/30 z-20">
                                 <Flame size={14} className="text-red-400" />
                             </div>
                         </div>
