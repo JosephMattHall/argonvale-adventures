@@ -29,6 +29,7 @@ class TurnProcessed(GameEvent):
 class CombatEnded(GameEvent):
     combat_id: str
     winner_id: int
+    mode: Literal["pve", "pvp"] = "pve"
     loot: Optional[Dict[str, Any]] = None
     dropped_item: Optional[Dict[str, Any]] = None # Item template data
     xp_gained: int = 0

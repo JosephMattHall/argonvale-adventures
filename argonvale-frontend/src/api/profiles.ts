@@ -34,6 +34,7 @@ export interface Companion {
     defense: number;
     speed: number;
     is_active: boolean;
+    status: string;
 }
 
 export const profilesApi = {

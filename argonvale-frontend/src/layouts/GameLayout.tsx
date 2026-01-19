@@ -8,7 +8,8 @@ import {
     Users,
     TrendingUp,
     Compass,
-    ShoppingCart
+    ShoppingCart,
+    Trophy
 } from 'lucide-react';
 import CompanionsView from '../features/companions/CompanionsView';
 import CompanionCreation from '../features/companions/CompanionCreation';
@@ -18,6 +19,7 @@ import TrainingView from '../features/training/TrainingView';
 import InventoryView from '../features/inventory/InventoryView';
 import ExplorationView from '../features/exploration/ExplorationView';
 import ShopView from '../features/shop/ShopView';
+import LeaderboardView from '../features/social/LeaderboardView';
 import MyProfile from '../pages/MyProfile';
 import UserProfile from '../pages/UserProfile';
 import Messages from '../pages/Messages';
@@ -28,18 +30,7 @@ const GameLayout: React.FC = () => {
     const navigate = useNavigate();
 
     // Auto-navigate to combat on encounter
-    React.useEffect(() => {
-        if (messages.length === 0) return;
-        const lastMsg = messages[messages.length - 1];
-        if (lastMsg.type === 'CombatStarted') {
-            navigate('/game/battle', {
-                state: {
-                    battleContext: lastMsg.context,
-                    combatId: lastMsg.combat_id
-                }
-            });
-        }
-    }, [messages, navigate]);
+
 
     return (
         <div className="h-screen w-full flex flex-col bg-dark">
@@ -72,6 +63,9 @@ const GameLayout: React.FC = () => {
                         <Link to="/game/messages" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
                             <MessageSquare size={18} className="text-secondary" /> Messages
                         </Link>
+                        <Link to="/game/leaderboard" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
+                            <Trophy size={18} className="text-gold" /> Hall of Heroes
+                        </Link>
                     </nav>
 
                     <div className="p-4 border-t border-border-subtle text-xs">
@@ -84,8 +78,8 @@ const GameLayout: React.FC = () => {
                     </div>
                 </aside>
 
-                <main className="flex-1 glass-panel m-2 lg:ml-0 overflow-hidden flex flex-col mb-20 lg:mb-2">
-                    <div className="flex-1 overflow-auto p-4">
+                <main className="flex-1 glass-panel m-2 lg:ml-0 overflow-auto mb-20 lg:mb-2">
+                    <div className="h-full p-4">
                         <Routes>
                             <Route path="battle-select" element={<BattleSelection />} />
                             <Route path="battle" element={<CombatView />} />
@@ -96,23 +90,12 @@ const GameLayout: React.FC = () => {
                             <Route path="inventory" element={<InventoryView />} />
                             <Route path="explore" element={<ExplorationView />} />
                             <Route path="messages" element={<Messages />} />
+                            <Route path="leaderboard" element={<LeaderboardView />} />
                             <Route path="messages/:userId" element={<Messages />} />
                             <Route path="profile/me" element={<MyProfile />} />
                             <Route path="profile/:username" element={<UserProfile />} />
                             <Route path="*" element={<Navigate to="/game/explore" replace />} />
                         </Routes>
-                    </div>
-
-                    <div className="h-20 border-t border-border-subtle p-2 bg-dark/50">
-                        <div className="text-[10px] text-gray-500 uppercase mb-1">Server Messages</div>
-                        <div className="h-full overflow-auto text-xs font-mono text-gray-400 custom-scrollbar">
-                            {messages.slice(-3).map((msg, idx) => (
-                                <div key={idx} className="truncate border-b border-white/5 last:border-0 py-1">
-                                    <span className="text-primary mr-2">[{msg.type}]</span>
-                                    {JSON.stringify(msg.payload || msg)}
-                                </div>
-                            ))}
-                        </div>
                     </div>
                 </main>
             </div>
@@ -129,7 +112,7 @@ const GameLayout: React.FC = () => {
                 </Link>
                 <Link to="/game/companions" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
                     <Users size={20} className="text-secondary" />
-                    <span className="text-[10px] uppercase font-bold">Party</span>
+                    <span className="text-[10px] uppercase font-bold">Companions</span>
                 </Link>
                 <Link to="/game/inventory" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
                     <Package size={20} className="text-gold" />
@@ -141,7 +124,7 @@ const GameLayout: React.FC = () => {
                 </Link>
                 <Link to="/game/train" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
                     <TrendingUp size={20} className="text-primary" />
-                    <span className="text-[10px] uppercase font-bold">Power</span>
+                    <span className="text-[10px] uppercase font-bold">Training</span>
                 </Link>
             </nav>
         </div>

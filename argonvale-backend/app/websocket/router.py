@@ -16,6 +16,7 @@ from app.auth.security import SECRET_KEY, ALGORITHM
 from pspf.events.base import GameEvent
 from pspf.events.movement import PlayerMoved, LootFound
 from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue
+from pspf.events.training import TrainingStarted, TrainingCompleted
 from pspf.events.companion import ChooseStarter, CompanionCreated
 from pspf.processors.exploration import ExplorationProcessor
 from pspf.processors.combat import CombatProcessor
@@ -176,7 +177,7 @@ class GameServer:
                     logger.warning(f"User {user_id} provided invalid companion_id: {companion_id_raw}")
                     return
 
-                logger.info(f"User {user_id} entering combat with companion {companion_id}")
+                logger.info(f"User {user_id} entering arena combat with companion {companion_id}")
                 
                 db = SessionLocal()
                 try:
@@ -217,10 +218,74 @@ class GameServer:
                         }
                     )
                     output_events.append(out_evt)
-                    logger.info(f"Created CombatStarted event {combat_id}")
+                    logger.info(f"Created Arena CombatStarted event {combat_id}")
                     # Initialize session
                     self.combat.process(turn_state, out_evt)
                     logger.info(f"Initialized combat session {combat_id}")
+                finally:
+                    db.close()
+
+            elif msg_type == "JoinPvEEncounter":
+                # User selected a companion for a pre-generated encounter
+                combat_id = payload.get("combat_id")
+                companion_id_raw = payload.get("companion_id")
+                
+                if not combat_id or not companion_id_raw:
+                    return
+
+                try:
+                    companion_id = int(companion_id_raw)
+                except:
+                    return
+
+                # Get the existing Combat Session (created by ExplorationProcessor)
+                session = self.combat.sessions.get(combat_id)
+                if not session:
+                    # Should update checking logic, but for now log error
+                    logger.error(f"Combat session {combat_id} not found for JoinPvEEncounter")
+                    return
+
+                db = SessionLocal()
+                try:
+                    companion = db.query(Companion).filter(Companion.id == companion_id, Companion.owner_id == user_id).first()
+                    
+                    if companion:
+                        # Get Inventory
+                        from app.models.item import Item as DBItem
+                        equipped_items_db = db.query(DBItem).filter(DBItem.owner_id == user_id, DBItem.is_equipped == True).all()
+                        equipped_items = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats} for i in equipped_items_db]
+
+                        encounter_context = payload.get("context", {})
+                        
+                        full_context = encounter_context.copy()
+                        full_context.update({
+                             "companion_id": companion.id,
+                             "companion_name": companion.name,
+                             "companion_image": companion.image_url,
+                             "player_hp": companion.hp,
+                             "player_max_hp": companion.max_hp,
+                             "player_stats": {
+                                 "str": companion.strength,
+                                 "def": companion.defense,
+                                 "spd": companion.speed
+                             },
+                             "equipped_items": equipped_items
+                        })
+                        
+                        # Create and Process CombatStarted Event
+                        start_event = CombatStarted.create(
+                            combat_id=combat_id,
+                            attacker_id=user_id,
+                            mode="pve",
+                            context=full_context
+                        )
+                        
+                        output_events.append(start_event) # IMPORTANT: Send the event to the client!
+                        output_events.extend(self.combat.process(turn_state, start_event))
+                        logger.info(f"Initialized PvE combat {combat_id} with companion {companion.name}")
+                    else:
+                        logger.warning(f"Companion {companion_id} not found for user {user_id}")
+                        
                 finally:
                     db.close()
 
@@ -236,40 +301,6 @@ class GameServer:
                     # Random Encounter Logic
                     exploration_results = self.exploration.process(turn_state, event)
                     output_events.extend(exploration_results)
-                    
-                    # If an encounter started, we need to inject real companion stats into CombatStarted context
-                    for out_evt in exploration_results:
-                        if isinstance(out_evt, CombatStarted):
-                            db = SessionLocal()
-                            try:
-                                active_companion = db.query(Companion).filter(
-                                    Companion.owner_id == user_id,
-                                    Companion.is_active == True
-                                ).first()
-                                
-                                if active_companion:
-                                    from app.models.item import Item as DBItem
-                                    equipped_items_db = db.query(DBItem).filter(DBItem.owner_id == user_id, DBItem.is_equipped == True).all()
-                                    equipped_items = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats} for i in equipped_items_db]
-                                    
-                                    out_evt.context.update({
-                                        "enemy_image": out_evt.context.get("enemy_image", "default_enemy.png"), # Ensure enemy image is present
-                                        "companion_id": active_companion.id,
-                                        "companion_name": active_companion.name,
-                                        "companion_image": active_companion.image_url,
-                                        "player_hp": active_companion.hp,
-                                        "player_max_hp": active_companion.max_hp,
-                                        "player_stats": {
-                                            "str": active_companion.strength,
-                                            "def": active_companion.defense,
-                                            "spd": active_companion.speed
-                                        },
-                                        "equipped_items": equipped_items
-                                    })
-                                    # Manually trigger the processor to start the session with this context
-                                    self.combat.process(turn_state, out_evt)
-                            finally:
-                                db.close()
 
                 # Combat
                 if isinstance(event, (CombatAction)):
@@ -405,6 +436,8 @@ class GameServer:
                             user = db.query(User).filter(User.id == user_id).first()
                             if user:
                                 user.coins += reward
+                                if out_event.mode == "pvp":
+                                    user.pvp_wins += 1
                                 db.commit()
                             
                             # Reward XP to companion
@@ -464,7 +497,7 @@ class GameServer:
 
                         
             except Exception as e:
-                logger.error(f"Persistence Error: {e}")
+                print(f"Persistence Error: {e}")
                 db.rollback()
             finally:
                 db.close()

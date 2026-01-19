@@ -49,5 +49,19 @@ export const companionsApi = {
             headers: getAuthHeaders()
         });
         return response.data;
+    },
+
+    healCompanion: async (companionId: number) => {
+        const response = await axios.post(`${API_URL}/api/companions/heal/${companionId}`, {}, {
+            headers: getAuthHeaders()
+        });
+        return response.data;
+    },
+
+    abandonCompanion: async (companionId: number) => {
+        const response = await axios.delete(`${API_URL}/api/companions/${companionId}`, {
+            headers: getAuthHeaders()
+        });
+        return response.data;
     }
 };

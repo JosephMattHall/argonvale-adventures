@@ -19,6 +19,7 @@ class User(Base):
     last_active = Column(String, default="")  # ISO format timestamp
     mail_preference = Column(String, default="everyone")  # 'friends' or 'everyone'
     has_starter = Column(Boolean, default=False)  # Whether user has selected starter companion
+    pvp_wins = Column(Integer, default=0)
     
     # Exploration Persistence
     last_x = Column(Integer, default=8)

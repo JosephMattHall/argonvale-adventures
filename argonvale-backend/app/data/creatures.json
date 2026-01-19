@@ -130,6 +130,7 @@
     {
       "name": "Mossback Hare",
       "type": "Earth",
+      "image_url": "default_companion.png",
       "role": "Scout",
       "description": "Small moss-covered rabbit, clever and fast.",
       "level": 1,
@@ -154,6 +155,7 @@
     {
       "name": "Cinder Lizard",
       "type": "Water",
+      "image_url": "default_companion.png",
       "role": "Damage Dealer",
       "description": "A semi-aquatic lizard with steamy scales.",
       "level": 1,
@@ -178,6 +180,7 @@
     {
       "name": "Dewtail",
       "type": "Fire",
+      "image_url": "default_companion.png",
       "role": "Balanced",
       "description": "A fox-like creature with a burning tail that looks like liquid fire.",
       "level": 1,
@@ -202,6 +205,7 @@
     {
       "name": "Brambles",
       "type": "Earth",
+      "image_url": "default_companion.png",
       "role": "Tank",
       "description": "A toad covered in sharp thorns and tough hide.",
       "level": 1,
@@ -226,6 +230,7 @@
     {
       "name": "Spark",
       "type": "Fire",
+      "image_url": "default_companion.png",
       "role": "Scout",
       "description": "A beetles that emits crackling sparks.",
       "level": 1,
@@ -250,6 +255,7 @@
     {
       "name": "Gustwing Sparrow",
       "type": "Wind",
+      "image_url": "default_companion.png",
       "role": "Scout",
       "description": "A small bird that commands the breeze.",
       "level": 1,
@@ -274,6 +280,7 @@
     {
       "name": "Riverfin Minnow",
       "type": "Water",
+      "image_url": "default_companion.png",
       "role": "Support",
       "description": "A fish floating in a bubble of river water.",
       "level": 1,
@@ -298,6 +305,7 @@
     {
       "name": "Shadow Prowler",
       "type": "Shadow",
+      "image_url": "default_companion.png",
       "role": "Striker",
       "description": "A sleek feline that blends into the darkness.",
       "level": 1,
@@ -322,6 +330,7 @@
     {
       "name": "Ember Pup",
       "type": "Fire",
+      "image_url": "default_companion.png",
       "role": "Balanced",
       "description": "A playful canine pup wreathed in gentle flames.",
       "level": 1,
@@ -346,6 +355,7 @@
     {
       "name": "Gloom Bat",
       "type": "Shadow",
+      "image_url": "default_companion.png",
       "role": "Scout",
       "description": "A bat that shrieks with the sound of the void.",
       "level": 1,

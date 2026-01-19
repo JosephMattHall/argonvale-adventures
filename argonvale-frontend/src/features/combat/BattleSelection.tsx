@@ -1,123 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../../context/UserContext';
 import { profilesApi, type Companion } from '../../api/profiles';
 import { equipmentApi, type Item } from '../../api/equipment';
 import { useGameSocket } from '../../hooks/useGameSocket';
-import { Swords, ChevronRight, Shield, Heart, Zap } from 'lucide-react';
-
-const OPPONENTS = [
-    {
-        name: "Wild Emberfang", species: "Emberfang", type: "Fire",
-        image_url: "/companions/emberfang.png",
-        stats: { STR: 12, DEF: 8, HP: 60 },
-        weapons: [
-            { name: "Spark Staff", stats: { atk: { fire: 6, light: 2 } } },
-            { name: "Searing Claws", stats: { atk: { fire: 5 } } },
-            { name: "Fire Herb", stats: { atk: { fire: 3 } } }
-        ],
-        items: [
-            { id: "p1", name: "Fire Herb", type: "heal", value: 25 },
-            { id: "p1b", name: "Ash Shield", type: "block", value: 15 },
-            { id: "p1c", name: "Magma Potion", type: "heal", value: 30 },
-            { id: "p1d", name: "Smolder Stone", stats: { atk: { fire: 6 } } },
-            { id: "p1e", name: "Ember Cloak", stats: { def: { fire: 8 } } }
-        ]
-    },
-    {
-        name: "Ancient Stoneback", species: "Stoneback Tortoise", type: "Earth",
-        image_url: "/companions/stoneback_tortoise.png",
-        stats: { STR: 10, DEF: 20, HP: 100 },
-        weapons: [
-            { name: "Stone Shield", stats: { def: { earth: 12 } } },
-            { name: "Crushing Shell", stats: { atk: { earth: 5 } } },
-            { name: "Rock Spike", stats: { atk: { earth: 8 } } }
-        ],
-        items: [
-            { id: "p2", name: "Hardened Resin", type: "block", value: 10 },
-            { id: "p2b", name: "Iron Bark", type: "block", value: 20 },
-            { id: "p2c", name: "Mountain Dew", type: "heal", value: 50 },
-            { id: "p2d", name: "Sand Armor", stats: { def: { earth: 10 } } },
-            { id: "p2e", name: "Dust Potion", type: "heal", value: 25 }
-        ]
-    },
-    {
-        name: "Storm Raptor", species: "Galehorn Raptor", type: "Wind",
-        image_url: "/companions/galehorn_raptor.png",
-        stats: { STR: 18, DEF: 6, HP: 55 },
-        weapons: [
-            { name: "Stormcaller Bow", stats: { atk: { wind: 15 } } },
-            { name: "Razor Wing", stats: { atk: { wind: 8 } } },
-            { name: "Wind Talon", stats: { atk: { wind: 8 } } }
-        ],
-        items: [
-            { id: "p3", name: "Gale Potion", type: "heal", value: 20 },
-            { id: "p3b", name: "Cloud Mist", type: "block", value: 20 },
-            { id: "p3c", name: "Sky Berry", type: "heal", value: 25 },
-            { id: "p3d", name: "Feather Guard", stats: { def: { wind: 8 } } },
-            { id: "p3e", name: "Zephyr Wing", stats: { atk: { wind: 6 } } }
-        ]
-    },
-    {
-        name: "Tidal Serpent", species: "Tidemaw Serpent", type: "Water",
-        image_url: "/companions/tidemaw_serpent.png",
-        stats: { STR: 14, DEF: 14, HP: 75 },
-        weapons: [
-            { name: "Corsair's Cutlass", stats: { atk: { phys: 14, water: 6 } } },
-            { name: "Water Whip", stats: { atk: { water: 8 } } },
-            { name: "Ocean Guard", stats: { def: { water: 15 } } }
-        ],
-        items: [
-            { id: "p4", name: "Healing Mist", type: "heal", value: 35 },
-            { id: "p4b", name: "Coral Shield", type: "block", value: 15 },
-            { id: "p4c", name: "Pearl Potion", type: "heal", value: 40 },
-            { id: "p4d", name: "Shell Mail", stats: { def: { water: 10 } } },
-            { id: "p4e", name: "Wave Potion", type: "heal", value: 25 }
-        ]
-    },
-    {
-        name: "Void Umbraclaw", species: "Umbraclaw", type: "Shadow",
-        image_url: "/companions/umbraclaw.png",
-        stats: { STR: 20, DEF: 10, HP: 70 },
-        weapons: [
-            { name: "Executioner's Axe", stats: { atk: { shadow: 15 } } },
-            { name: "Shadow Edge", stats: { atk: { shadow: 10 } } },
-            { name: "Void Fang", stats: { atk: { shadow: 12 } } }
-        ],
-        items: [
-            { id: "p5", name: "Dark Elixir", type: "heal", value: 40 },
-            { id: "p5b", name: "Umbra Veil", type: "block", value: 20 },
-            { id: "p5c", name: "Nightshade", type: "heal", value: 35 },
-            { id: "p5d", name: "Ghost Armor", stats: { def: { shadow: 12 } } },
-            { id: "p5e", name: "Dusk Potion", type: "heal", value: 30 }
-        ]
-    },
-    {
-        name: "System Overlord", species: "Computer", type: "Digital",
-        image_url: "/companions/default_companion.png",
-        stats: { STR: 25, DEF: 20, HP: 200 },
-        weapons: [
-            { name: "Binary Blade", stats: { atk: { light: 25 } } },
-            { name: "Kernel Crusher", stats: { atk: { earth: 20, light: 10 } } },
-            { name: "Overclocked Rifle", stats: { atk: { wind: 25 } } }
-        ],
-        items: [
-            { id: "p6", name: "Firewall Aegis", stats: { def: { fire: 15, phys: 15 } } },
-            { id: "p6b", name: "Logic Shield", stats: { def: { light: 18, phys: 12 } } },
-            { id: "p6c", name: "System Restore", type: "heal", value: 100 },
-            { id: "p6d", name: "Patch Potion", type: "heal", value: 60 },
-            { id: "p6e", name: "Cache Clear", type: "block", value: 40 }
-        ]
-    },
-];
+import { Swords, Zap, Shield, Heart, Skull } from 'lucide-react';
 
 const BattleSelection: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { sendCommand, messages } = useGameSocket();
     const { profile } = useUser();
+
+    // Encounter Context (from Exploration)
+    // Structure: { enemy_name, enemy_type, enemy_hp, enemy_max_hp, enemy_stats, ... }
+    const encounterContext = location.state?.encounterContext;
+    const encounterCombatId = location.state?.combatId;
+    const isEncounterMode = !!encounterContext;
+
     const [companions, setCompanions] = useState<Companion[]>([]);
     const [equippedItems, setEquippedItems] = useState<Item[]>([]);
-    const [selectedOpponent, setSelectedOpponent] = useState<number | null>(null);
     const [selectedCompanionId, setSelectedCompanionId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [isStarting, setIsStarting] = useState(false);
@@ -134,7 +36,11 @@ const BattleSelection: React.FC = () => {
                 ]);
                 setCompanions(compData);
                 setEquippedItems(invData.filter(i => i.is_equipped));
-                if (compData.length > 0) setSelectedCompanionId(compData[0].id);
+
+                // Auto-select first active companion
+                const active = compData.find(c => c.is_active) || compData[0];
+                if (active) setSelectedCompanionId(active.id);
+
             } catch (e) {
                 console.error("Failed to load battle data", e);
             } finally {
@@ -147,25 +53,47 @@ const BattleSelection: React.FC = () => {
     useEffect(() => {
         if (!isStarting) return;
         const newMessages = messages.slice(initialMsgCount);
-        const combatStarted = newMessages.find((m: any) => m.type === 'CombatStarted' && m.attacker_id === profile?.id);
+
+        // Wait for CombatStarted to be confirmed/re-sent for our session
+        // For PvE Encounter join, we look for a CombatStarted that has our companion data populated
+        const combatStarted = newMessages.find((m: any) =>
+            m.type === 'CombatStarted' &&
+            m.attacker_id === profile?.id &&
+            m.context?.companion_id === selectedCompanionId // Confirm it's the one we just joined
+        );
+
         if (combatStarted) {
             setIsStarting(false);
             setIsQueuing(false);
-            navigate('/game/battle', { state: { battleContext: combatStarted.context, combatId: combatStarted.combat_id } });
+            navigate('/game/battle', {
+                state: {
+                    battleContext: combatStarted.context,
+                    combatId: combatStarted.combat_id,
+                    origin: location.state?.origin // Pass origin through
+                }
+            });
         }
-    }, [messages, profile, navigate, isStarting, initialMsgCount]);
+    }, [messages, profile, navigate, isStarting, initialMsgCount, selectedCompanionId, location.state]);
 
-    const handleStartBattle = () => {
-        if (selectedOpponent === null || selectedCompanionId === null) return;
-
-        const opponent = OPPONENTS[selectedOpponent];
+    const handleStartEncounter = () => {
+        if (!selectedCompanionId || !encounterCombatId) return;
 
         setIsStarting(true);
         setInitialMsgCount(messages.length);
+
+        // For Encounter Mode, we are "Joining" the already created combat with our selected companion
+        // We reuse EnterCombat but pass the combat_id if backend supports it, OR
+        // we emit a new "JoinEncounter" event if we added that. 
+        // Based on current backend implementation, EnterCombat creates a NEW combat.
+        // We need to support joining the specific one.
+        // Let's send a special EnterCombat payload or a new type.
+        // We'll use "JoinPvEEncounter" to be explicit.
+
         sendCommand({
-            type: "EnterCombat",
-            opponent,
-            companion_id: selectedCompanionId
+            type: "JoinPvEEncounter",
+            combat_id: encounterCombatId,
+            companion_id: selectedCompanionId,
+            context: encounterContext // Pass back the context so backend can merge it
         });
     };
 
@@ -187,11 +115,12 @@ const BattleSelection: React.FC = () => {
         <div className="h-full flex flex-col p-6">
             <h2 className="text-3xl font-medieval text-gold mb-8 flex items-center gap-3">
                 <Swords className="text-primary" size={32} />
-                Battle Arena
+                {isEncounterMode ? 'Wild Encounter!' : 'Battle Arena'}
             </h2>
 
             <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 lg:gap-8 flex-1 overflow-y-auto lg:overflow-hidden pr-1 custom-scrollbar">
-                {/* Companion Selection */}
+
+                {/* Left Col: Companion Selection */}
                 <div className="lg:col-span-1 flex flex-col gap-6">
                     <div>
                         <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-4">Choose Your Hero</h3>
@@ -234,55 +163,58 @@ const BattleSelection: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Opponent List */}
-                <div className="lg:col-span-2 flex flex-col min-h-0">
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-4">Choose Your Opponent</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:overflow-y-auto pr-2 custom-scrollbar flex-1 mb-6">
-                        {OPPONENTS.map((opp, idx) => (
-                            <div
-                                key={idx}
-                                onClick={() => setSelectedOpponent(idx)}
-                                className={`
-                                    glass-panel p-4 cursor-pointer transition-all flex items-center justify-between
-                                    ${selectedOpponent === idx ? 'border-primary bg-primary/10' : 'hover:bg-white/5'}
-                                `}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-black/20 rounded-lg flex items-center justify-center text-2xl shadow-inner overflow-hidden border border-white/5">
-                                        {opp.image_url ? <img src={opp.image_url} alt="" className="w-full h-full object-cover" /> :
-                                            (opp.type === 'Fire' ? '🔥' : opp.type === 'Water' ? '💧' : opp.type === 'Earth' ? '🗿' : '👹')}
-                                    </div>
-                                    <div>
-                                        <div className="font-medieval text-white">{opp.name}</div>
-                                        <div className="text-[10px] text-gray-400 uppercase tracking-widest">{opp.type} • HP: {opp.stats.HP}</div>
-                                    </div>
-                                </div>
-                                <ChevronRight size={20} className={selectedOpponent === idx ? 'text-primary' : 'text-gray-600'} />
-                            </div>
-                        ))}
-                    </div>
+                {/* Right Col: Encounter OR PvP Lobby */}
+                <div className="lg:col-span-2 flex flex-col min-h-0 justify-center">
 
-                    <div className="sticky bottom-0 lg:static bg-dark lg:bg-transparent py-4 lg:py-0">
-                        <div className="flex flex-col sm:flex-row gap-4">
+                    {isEncounterMode ? (
+                        <div className="glass-panel p-8 flex flex-col items-center gap-6 border-red-500/30 bg-red-900/10">
+                            <h3 className="text-xl font-medieval text-red-400 animate-pulse">A Wild Enemy Appeared!</h3>
+
+                            <div className="w-32 h-32 bg-black/40 rounded-full flex items-center justify-center border-4 border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+                                <span className="text-6xl">
+                                    {encounterContext.enemy_type === 'Fire' ? '🔥' :
+                                        encounterContext.enemy_type === 'Water' ? '💧' :
+                                            encounterContext.enemy_type === 'Earth' ? '🗿' : '👹'}
+                                </span>
+                            </div>
+
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-white mb-2">{encounterContext.enemy_name}</div>
+                                <div className="flex items-center gap-4 justify-center text-sm text-gray-400">
+                                    <span className="flex items-center gap-1"><Skull size={14} /> Level {encounterContext.enemy_level || 1}</span>
+                                    <span className="flex items-center gap-1"><Heart size={14} /> {encounterContext.enemy_hp} HP</span>
+                                </div>
+                            </div>
+
                             <button
-                                disabled={selectedOpponent === null || selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting || isQueuing}
-                                onClick={handleStartBattle}
-                                className="btn-primary flex-1 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-glow-primary/20"
+                                disabled={selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting}
+                                onClick={handleStartEncounter}
+                                className="mt-4 btn-primary py-4 px-12 text-xl w-full max-w-md shadow-glow-primary/40 animate-pulse-slow"
                             >
-                                <Swords />
-                                {isStarting ? 'Entering Arena...' : selectedCompanion?.hp === 0 ? 'Heal Companion First!' : 'Enter Combat'}
+                                {isStarting ? 'Engaging...' : 'FIGHT!'}
                             </button>
+                        </div>
+                    ) : (
+                        <div className="glass-panel p-8 flex flex-col items-center gap-6 border-blue-500/10 bg-blue-900/5">
+                            <div className="text-center space-y-2">
+                                <h3 className="text-xl font-medieval text-blue-300">PvP Arena Lobby</h3>
+                                <p className="text-sm text-gray-400 max-w-md">Challenge other players to real-time combat. defeats grant rewards and glory on the leaderboards.</p>
+                            </div>
+
+                            <div className="w-32 h-32 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/30">
+                                <Swords size={48} className="text-blue-400" />
+                            </div>
 
                             <button
                                 disabled={selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting || isQueuing}
                                 onClick={handleJoinQueue}
-                                className="btn-gold flex-1 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-glow-gold/20"
+                                className="mt-4 btn-gold py-4 px-12 text-xl w-full max-w-md shadow-glow-gold/20"
                             >
-                                <Zap className={isQueuing ? 'animate-spin' : ''} />
-                                {isQueuing ? 'Searching for Rivals...' : 'Queue for PvP'}
+                                <Zap className={`inline mr-2 ${isQueuing ? 'animate-spin' : ''}`} />
+                                {isQueuing ? 'Searching for Opponent...' : 'Join PvP Queue'}
                             </button>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

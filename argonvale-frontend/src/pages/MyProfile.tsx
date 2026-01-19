@@ -11,6 +11,13 @@ const MyProfile: React.FC = () => {
     const [bio, setBio] = useState('');
     const [selectedTitle, setSelectedTitle] = useState('');
     const [loading, setLoading] = useState(true);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 640);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         loadProfile();
@@ -64,21 +71,21 @@ const MyProfile: React.FC = () => {
 
             <div className="space-y-6">
                 {/* Profile Info */}
-                <div className="glass-panel p-6">
-                    <div className="flex items-start gap-6">
+                <div className="glass-panel p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                         {/* Avatar */}
-                        <div className="w-32 h-32 bg-dark rounded-lg flex items-center justify-center border-2 border-gold shrink-0">
-                            <User size={64} className="text-gold" />
+                        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-dark rounded-lg flex items-center justify-center border-2 border-gold shrink-0">
+                            <User size={isMobile ? 48 : 64} className="text-gold" />
                         </div>
 
                         {/* Info */}
-                        <div className="flex-1">
-                            <div className="flex items-center justify-between mb-4">
+                        <div className="flex-1 w-full text-center sm:text-left">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
                                 <div className="flex flex-col">
                                     <h2 className="text-2xl font-medieval text-white">{profile.username}</h2>
                                     <div className="text-secondary font-bold text-xs uppercase tracking-widest">{profile.title}</div>
                                 </div>
-                                <div className="flex items-center gap-4 bg-dark rounded-full px-4 py-1.5 border border-gold/20 shadow-glow-gold/10">
+                                <div className="flex items-center justify-center gap-4 bg-dark rounded-full px-4 py-1.5 border border-gold/20 shadow-glow-gold/10">
                                     <Coins size={18} className="text-gold" />
                                     <span className="font-bold text-gold">{profile.coins}</span>
                                 </div>
@@ -94,8 +101,8 @@ const MyProfile: React.FC = () => {
                                                 key={t}
                                                 onClick={() => setSelectedTitle(t)}
                                                 className={`px-3 py-1 rounded-full border text-xs font-bold transition-all ${selectedTitle === t
-                                                        ? 'bg-secondary/20 border-secondary text-secondary shadow-glow'
-                                                        : 'bg-dark border-white/10 text-gray-400 hover:border-gray-500'
+                                                    ? 'bg-secondary/20 border-secondary text-secondary shadow-glow'
+                                                    : 'bg-dark border-white/10 text-gray-400 hover:border-gray-500'
                                                     }`}
                                             >
                                                 {t}

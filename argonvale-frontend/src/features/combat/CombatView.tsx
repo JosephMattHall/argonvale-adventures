@@ -73,7 +73,8 @@ const CombatView: React.FC = () => {
 
     useEffect(() => {
         const combatEvents = messages.filter((m: any) =>
-            m.type === 'TurnProcessed' || m.type === 'CombatEnded'
+            (m.type === 'TurnProcessed' || m.type === 'CombatEnded') &&
+            m.combat_id === combatId
         );
 
         if (combatEvents.length > 0) {
@@ -224,10 +225,17 @@ const CombatView: React.FC = () => {
                     {result === 'win' ? 'Your companion proved its worth and gathered spoils!' : 'Your companion was overpowered. Regroup and try again.'}
                 </p>
                 <button
-                    onClick={() => navigate('/game/battle-select')}
+                    onClick={() => {
+                        const origin = location.state?.origin;
+                        if (origin === 'exploration') {
+                            navigate('/game/explore');
+                        } else {
+                            navigate('/game/battle-select');
+                        }
+                    }}
                     className="btn-primary px-12 py-4 text-xl hover:scale-105 transition-transform"
                 >
-                    Return to Arena
+                    {location.state?.origin === 'exploration' ? 'Continue Journey' : 'Return to Arena'}
                 </button>
             </div>
         );
@@ -236,36 +244,36 @@ const CombatView: React.FC = () => {
     return (
         <div className="flex flex-col h-full gap-4 max-w-7xl mx-auto w-full overflow-y-auto pr-1 custom-scrollbar pb-24 lg:pb-0">
             {/* Battle Arena */}
-            <div className="flex-none lg:flex-1 glass-panel relative p-4 lg:p-8 flex flex-col md:flex-row justify-between items-center overflow-hidden min-h-[300px]">
+            <div className="flex-none lg:flex-1 glass-panel relative p-3 sm:p-4 lg:p-8 flex flex-col md:flex-row justify-between items-center overflow-hidden min-h-[400px] md:min-h-[300px] gap-6 md:gap-0">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
 
                 {/* Player Side */}
-                <div className={`text-center z-10 transition-all duration-300 ${playerAnimating}`}>
+                <div className={`text-center z-10 transition-all duration-300 w-full md:w-auto ${playerAnimating}`}>
                     <div className="relative group">
-                        <div className="w-32 h-32 bg-primary/20 rounded-2xl mb-4 mx-auto border-2 border-primary flex items-center justify-center shadow-glow overflow-hidden relative">
+                        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-primary/20 rounded-2xl mb-4 mx-auto border-2 border-primary flex items-center justify-center shadow-glow overflow-hidden relative">
                             {/* Inner Glow/Aura */}
                             <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-transparent to-primary/20 animate-pulse" />
                             {context.companion_image ? (
                                 <img src={`/companions/${context.companion_image}`} alt="" className="w-full h-full object-cover z-10" />
                             ) : (
-                                <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">🐾</span>
+                                <span className="text-4xl sm:text-6xl z-10 transition-transform group-hover:scale-110 duration-500">🐾</span>
                             )}
                             {/* Elemental Overlay based on name or type if available */}
                             <div className="absolute bottom-1 right-1 bg-dark/80 rounded-full p-1 border border-primary/30 z-20">
-                                <Zap size={14} className="text-gold" />
+                                <Zap size={10} className="text-gold" />
                             </div>
                         </div>
                     </div>
-                    <div className="font-medieval mb-2 text-primary text-2xl tracking-wide uppercase">
+                    <div className="font-medieval mb-2 text-primary text-xl sm:text-2xl tracking-wide uppercase">
                         {context.companion_name}
                     </div>
-                    <div className="w-48 h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
+                    <div className="w-full sm:w-48 h-4 sm:h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
                         <div
                             className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-700 ease-out rounded-full"
                             style={{ width: `${(playerHp / playerMaxHp) * 100}%` }}
                         />
                     </div>
-                    <div className="text-sm mt-2 font-mono text-white font-bold">{playerHp} / {playerMaxHp} HP</div>
+                    <div className="text-[10px] sm:text-sm mt-2 font-mono text-white font-bold">{playerHp} / {playerMaxHp} HP</div>
                 </div>
 
                 {/* VS Center & Floating Damage Overlay */}
@@ -290,15 +298,15 @@ const CombatView: React.FC = () => {
                 </div>
 
                 {/* Enemy Side */}
-                <div className={`text-center z-10 transition-all duration-300 ${enemyAnimating}`}>
+                <div className={`text-center z-10 transition-all duration-300 w-full md:w-auto ${enemyAnimating}`}>
                     <div className="relative group">
-                        <div className="w-32 h-32 bg-red-500/20 rounded-2xl mb-4 mx-auto border-2 border-red-500/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.2)] overflow-hidden relative">
+                        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-red-500/20 rounded-2xl mb-4 mx-auto border-2 border-red-500/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.2)] overflow-hidden relative">
                             {/* Inner Glow/Aura */}
                             <div className="absolute inset-0 bg-gradient-to-bl from-red-500/20 via-transparent to-red-500/20 animate-pulse" />
                             {context.enemy_image ? (
                                 <img src={context.enemy_image.startsWith('/') ? context.enemy_image : `/companions/${context.enemy_image}`} alt="" className="w-full h-full object-cover z-10" />
                             ) : (
-                                <span className="text-6xl z-10 transition-transform group-hover:scale-110 duration-500">
+                                <span className="text-4xl sm:text-6xl z-10 transition-transform group-hover:scale-110 duration-500">
                                     {context.enemy_type === 'Fire' ? '🔥' :
                                         context.enemy_type === 'Water' ? '💧' :
                                             context.enemy_type === 'Earth' ? '🗿' : '👹'}
@@ -306,18 +314,18 @@ const CombatView: React.FC = () => {
                             )}
                             {/* Elemental Overlay */}
                             <div className="absolute top-1 left-1 bg-dark/80 rounded-full p-1 border border-red-500/30 z-20">
-                                <Flame size={14} className="text-red-400" />
+                                <Flame size={10} className="text-red-400" />
                             </div>
                         </div>
                     </div>
-                    <div className="font-medieval mb-2 text-red-500 text-2xl tracking-wide uppercase">{context.enemy_name}</div>
-                    <div className="w-48 h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
+                    <div className="font-medieval mb-2 text-red-500 text-xl sm:text-2xl tracking-wide uppercase">{context.enemy_name}</div>
+                    <div className="w-full sm:w-48 h-4 sm:h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
                         <div
                             className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-700 ease-out rounded-full"
                             style={{ width: `${(enemyHp / context.enemy_max_hp) * 100}%` }}
                         />
                     </div>
-                    <div className="text-sm mt-2 font-mono text-red-400 font-bold">{enemyHp} / {context.enemy_max_hp} HP</div>
+                    <div className="text-[10px] sm:text-sm mt-2 font-mono text-red-400 font-bold">{enemyHp} / {context.enemy_max_hp} HP</div>
                 </div>
             </div>
 

@@ -50,14 +50,14 @@ const ShopView: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <header className="flex justify-between items-center p-4 glass-panel border-gold/30">
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 gap-4 glass-panel border-gold/30">
                 <div>
-                    <h1 className="text-3xl font-medieval text-gold drop-shadow-glow-gold">Argonvale Emporium</h1>
-                    <p className="text-gray-400">Quality gear for every adventurer.</p>
+                    <h1 className="text-2xl sm:text-3xl font-medieval text-gold drop-shadow-glow-gold">Argonvale Emporium</h1>
+                    <p className="text-xs sm:text-sm text-gray-400">Quality gear for every adventurer.</p>
                 </div>
-                <div className="flex items-center gap-2 bg-dark rounded-full px-6 py-3 border border-gold/30 shadow-glow-gold/10">
-                    <Coins size={24} className="text-gold" />
-                    <span className="text-2xl font-bold text-gold">{profile?.coins || 0}</span>
+                <div className="flex items-center gap-2 bg-dark rounded-full px-4 sm:px-6 py-2 sm:py-3 border border-gold/30 shadow-glow-gold/10 w-full sm:w-auto justify-center sm:justify-start">
+                    <Coins size={20} className="text-gold" />
+                    <span className="text-xl sm:text-2xl font-bold text-gold">{profile?.coins || 0}</span>
                 </div>
             </header>
 

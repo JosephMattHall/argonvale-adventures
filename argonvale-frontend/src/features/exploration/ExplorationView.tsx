@@ -1,97 +1,108 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { MapPin, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Navigation } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Navigation } from 'lucide-react';
 import { useGameSocket } from '../../hooks/useGameSocket';
 import { useUser } from '../../context/UserContext';
-import townMap from '../../assets/maps/town_map.jpg';
-import wildMap from '../../assets/maps/wild_map.jpg';
 
-interface WorldObject {
-    id: string;
-    type: 'tree' | 'house' | 'pillar' | 'rock';
-    x: number;
-    y: number;
+// Tilemap Configuration
+const VIEWPORT_TILES = 15; // 15x15 tiles visible
+const TILE_SIZE = 48; // Display size (pixels)
+
+interface TilemapData {
     width: number;
     height: number;
-    icon: string;
-    isSolid: boolean;
+    tileSize: number;
+    tileset: string;
+    layers: {
+        ground: number[];
+        objects: number[];
+        collision: number[];
+    };
 }
 
-interface Zone {
-    id: string;
-    name: string;
-    gridSize: number;
-    image: string;
-    dangerLevel: number;
-    description: string;
-    objects: WorldObject[];
-}
-
-const ZONES: Record<string, Zone> = {
-    town: {
-        id: 'town',
-        name: 'Starter Town',
-        gridSize: 20,
-        image: townMap,
-        dangerLevel: 0,
-        description: 'A peaceful safe haven. Prepare for your journey here.',
-        objects: [
-            { id: 'h1', type: 'house', x: 5, y: 5, width: 3, height: 2, icon: '🏠', isSolid: true },
-            { id: 'h2', type: 'house', x: 12, y: 8, width: 3, height: 2, icon: '🏘️', isSolid: true },
-            { id: 't1', type: 'tree', x: 3, y: 3, width: 1, height: 1, icon: '🌳', isSolid: true },
-            { id: 't2', type: 'tree', x: 4, y: 3, width: 1, height: 1, icon: '🌲', isSolid: true },
-            { id: 't3', type: 'tree', x: 3, y: 4, width: 1, height: 1, icon: '🌳', isSolid: true },
-            { id: 'p1', type: 'pillar', x: 10, y: 10, width: 1, height: 1, icon: '🏛️', isSolid: true },
-        ]
-    },
-    wild: {
-        id: 'wild',
-        name: 'Wilderness',
-        gridSize: 60,
-        image: wildMap,
-        dangerLevel: 3,
-        description: 'A dangerous expanse filled with wild creatures.',
-        objects: [
-            { id: 'wt1', type: 'tree', x: 10, y: 10, width: 1, height: 1, icon: '🌲', isSolid: true },
-            { id: 'wt2', type: 'tree', x: 11, y: 11, width: 1, height: 1, icon: '🌲', isSolid: true },
-            { id: 'wr1', type: 'rock', x: 15, y: 15, width: 1, height: 1, icon: '🪨', isSolid: true },
-        ]
-    }
-};
-
-const VIEWPORT_SIZE = 14;
-const CELL_SIZE = 48;
 
 const ExplorationView: React.FC = () => {
-    const { profile } = useUser();
+    const { profile, updateProfile } = useUser();
+    const navigate = useNavigate();
+    const { sendCommand, isConnected, messages } = useGameSocket();
+
+    // State
     const [currentZoneId, setCurrentZoneId] = useState<string>(profile?.last_zone_id || 'town');
-    const [playerPos, setPlayerPos] = useState({
-        x: profile?.last_x ?? 8,
-        y: profile?.last_y ?? 8
-    });
+    const [mapData, setMapData] = useState<TilemapData | null>(null);
+    const [tilesetImage, setTilesetImage] = useState<HTMLImageElement | null>(null);
+    const [playerPos, setPlayerPos] = useState({ x: profile?.last_x ?? 8, y: profile?.last_y ?? 8 });
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+    // Refs
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const playerPosRef = useRef(playerPos);
-    const zoneRef = useRef(ZONES[currentZoneId]);
-    const { sendCommand, isConnected } = useGameSocket();
+    const lastMoveTimeRef = useRef(0);
+    const mapDataRef = useRef<TilemapData | null>(null);
+
+    // Initial Load & Zone Change
+    useEffect(() => {
+        const loadMap = async () => {
+            try {
+                // Load Map JSON
+                const res = await fetch(`/maps/${currentZoneId}.json`);
+                if (!res.ok) throw new Error("Map not found");
+                const data: TilemapData = await res.json();
+                setMapData(data);
+                mapDataRef.current = data;
+
+                // Load Tileset Image
+                const img = new Image();
+                img.src = '/tilesets/world_tileset.png'; // Hardcoded for now based on generator
+                img.onload = () => {
+                    console.log("Tileset loaded successfully");
+                    setTilesetImage(img);
+                };
+                img.onerror = (e) => console.error("Tileset failed to load", e);
+
+                // Reset position if changed zones explicitly (not initial load)
+                if (currentZoneId !== profile?.last_zone_id) {
+                    setPlayerPos({ x: Math.floor(data.width / 2), y: Math.floor(data.height / 2) });
+                }
+                console.log("Map Loaded:", data);
+            } catch (err) {
+                console.error("Failed to load map:", err);
+            }
+        };
+        loadMap();
+    }, [currentZoneId, profile]);
+
+    // Listen for Encounters
+    // Capture initial message count on mount using LAZY initialization to avoid processing old messages
+    const [initialMsgCount, setInitialMsgCount] = useState(() => messages.length);
 
     useEffect(() => {
-        if (profile) {
-            setCurrentZoneId(profile.last_zone_id || 'town');
-            setPlayerPos({ x: profile.last_x ?? 8, y: profile.last_y ?? 8 });
+        if (messages.length <= initialMsgCount) return;
+
+        // Scan ALL new messages, not just the last one
+        const newMessages = messages.slice(initialMsgCount);
+        const encounterEvent = newMessages.find((msg: any) =>
+            msg.type === 'CombatStarted' &&
+            msg.attacker_id === profile?.id &&
+            msg.mode === 'pve'
+        );
+
+        if (encounterEvent) {
+            // Update our message count tracker so we don't re-process this event
+            // But we probably will unmount anyway.
+            setInitialMsgCount(messages.length);
+
+            // Auto-navigate to Battle Selection Screen with Context
+            navigate('/game/battle-select', {
+                state: {
+                    encounterContext: encounterEvent.context,
+                    combatId: encounterEvent.combat_id,
+                    origin: 'exploration'
+                }
+            });
         }
-    }, [profile]);
+    }, [messages, initialMsgCount, profile, navigate]);
 
-    useEffect(() => {
-        playerPosRef.current = playerPos;
-    }, [playerPos]);
-
-    useEffect(() => {
-        zoneRef.current = ZONES[currentZoneId];
-        if (currentZoneId !== profile?.last_zone_id) {
-            const z = ZONES[currentZoneId];
-            setPlayerPos({ x: Math.floor(z.gridSize / 2), y: Math.floor(z.gridSize / 2) });
-        }
-    }, [currentZoneId]);
-
+    // Handle Input
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyS", "KeyA", "KeyD"].includes(e.code)) {
@@ -106,172 +117,228 @@ const ExplorationView: React.FC = () => {
 
             if (dx !== 0 || dy !== 0) move(dx, dy);
         };
-
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const isColliding = (x: number, y: number, zone: Zone) => {
-        return zone.objects.some(obj => {
-            if (!obj.isSolid) return false;
-            return x >= obj.x && x < obj.x + obj.width &&
-                y >= obj.y && y < obj.y + obj.height;
-        });
+    // Sync Ref
+    useEffect(() => {
+        playerPosRef.current = playerPos;
+    }, [playerPos]);
+
+    // Resize Handler
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Helper: Collision Check
+    const isSolid = (x: number, y: number) => {
+        if (!mapDataRef.current) return true;
+        const { width, height, layers } = mapDataRef.current;
+        if (x < 0 || x >= width || y < 0 || y >= height) return true;
+        return layers.collision[y * width + x] === 1;
     };
 
+    // Movement Logic
     const move = (dx: number, dy: number) => {
-        const currentZone = zoneRef.current;
+        const now = Date.now();
+        if (now - lastMoveTimeRef.current < 150) return;
+
         const currentPos = playerPosRef.current;
+        const nextX = currentPos.x + dx;
+        const nextY = currentPos.y + dy;
 
-        const nextX = Math.max(0, Math.min(currentZone.gridSize - 1, currentPos.x + dx));
-        const nextY = Math.max(0, Math.min(currentZone.gridSize - 1, currentPos.y + dy));
-
-        if (nextX === currentPos.x && nextY === currentPos.y) return;
-
-        // Collision Check
-        if (isColliding(nextX, nextY, currentZone)) {
-            // Shake effect or sound? Handled by UI feedback if needed
+        if (isSolid(nextX, nextY)) {
+            console.log("Movement Blocked at:", nextX, nextY);
+            // Blocked
+            // Could add "bump" sound or animation here
             return;
         }
 
+        lastMoveTimeRef.current = now;
         setPlayerPos({ x: nextX, y: nextY });
+
+        if (profile) {
+            updateProfile({
+                ...profile,
+                last_x: nextX,
+                last_y: nextY,
+                last_zone_id: currentZoneId
+            });
+        }
+
         sendCommand({
             type: "Move",
             direction: { dx, dy },
-            zone_id: currentZone.id
+            zone_id: currentZoneId
         });
     };
 
-    const zone = ZONES[currentZoneId];
-    const viewportPx = VIEWPORT_SIZE * CELL_SIZE;
+    // Render Loop
+    useEffect(() => {
+        if (!canvasRef.current || !mapData || !tilesetImage) return;
 
-    let cameraX = (VIEWPORT_SIZE / 2 - playerPos.x - 0.5) * CELL_SIZE;
-    let cameraY = (VIEWPORT_SIZE / 2 - playerPos.y - 0.5) * CELL_SIZE;
+        const ctx = canvasRef.current.getContext('2d');
+        if (!ctx) return;
 
-    const minTranslateX = -1 * (zone.gridSize - VIEWPORT_SIZE) * CELL_SIZE;
-    const minTranslateY = -1 * (zone.gridSize - VIEWPORT_SIZE) * CELL_SIZE;
+        // Constants using dynamic cell size based on screen
+        // We use constant TILE_SIZE (48px) for rendering clarity, scaled by CSS if needed
+        const renderTileSize = TILE_SIZE;
+        const viewportW = isMobile ? 10 : VIEWPORT_TILES;
+        const viewportH = isMobile ? 10 : VIEWPORT_TILES;
 
-    cameraX = Math.min(0, Math.max(minTranslateX, cameraX));
-    cameraY = Math.min(0, Math.max(minTranslateY, cameraY));
+        canvasRef.current.width = viewportW * renderTileSize;
+        canvasRef.current.height = viewportH * renderTileSize;
 
-    // Y-Sorting Renderable Entities
-    // We combine player and objects into one list and sort by y
-    const entities = [
-        ...zone.objects.map(obj => ({ ...obj, isPlayer: false })),
-        { id: 'player', type: 'player', x: playerPos.x, y: playerPos.y, width: 1, height: 1, icon: '👤', isPlayer: true }
-    ].sort((a, b) => {
-        // Sort by bottom Y coordinate
-        const ay = a.isPlayer ? a.y : a.y + a.height - 1;
-        const by = b.isPlayer ? b.y : b.y + b.height - 1;
-        return ay - by;
-    });
+        // Camera Top-Left logic (centered on player)
+        let camX = playerPos.x - Math.floor(viewportW / 2);
+        let camY = playerPos.y - Math.floor(viewportH / 2);
+
+        // Clamp Camera
+        camX = Math.max(0, Math.min(mapData.width - viewportW, camX));
+        camY = Math.max(0, Math.min(mapData.height - viewportH, camY));
+
+        ctx.fillStyle = '#1e293b'; // Dark background
+        ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+        // Define Tile SourceRect in Tileset (assuming 5 columns for now based on generator logic)
+        // Generator used IDs: 1=Grass, 6=Water, 11=Path, 16=Wall, 21=Tree
+        // This implies width of at least 5. Let's assume the image is 5 tiles wide (240px).
+        // If image is wider, we need to know. For now, assuming 5 cols.
+        const APP_TILES_ROW_COUNT = 5;
+
+        const drawTile = (tileId: number, screenX: number, screenY: number) => {
+            if (tileId === 0) return; // Empty
+            // Adjust ID if 1-indexed? Python script used 1-based logic (1=Grass) but array index 0?
+            // Python used 1... 
+            // Let's assume generated image top-left is ID 0.
+            // Python script used: GRASS=1. So if index is 1.
+            // Source X/Y
+            const srcX = (tileId % APP_TILES_ROW_COUNT) * 48;
+            const srcY = Math.floor(tileId / APP_TILES_ROW_COUNT) * 48;
+
+            ctx.drawImage(tilesetImage,
+                srcX, srcY, 48, 48, // Source
+                screenX, screenY, renderTileSize, renderTileSize // Dest
+            );
+        };
+
+        // Render Layers
+        for (let y = 0; y < viewportH; y++) {
+            for (let x = 0; x < viewportW; x++) {
+                const worldX = camX + x;
+                const worldY = camY + y;
+                const idx = worldY * mapData.width + worldX;
+
+                // 1. Ground
+                if (idx < mapData.layers.ground.length) {
+                    drawTile(mapData.layers.ground[idx], x * renderTileSize, y * renderTileSize);
+                }
+
+                // 2. Objects (Under Player)
+                // In top-down, objects usually render AFTER player if y > player.y
+                // For simplicity, let's render objects here. 
+                // Z-Sorting is huge improvement but tricky in simple loop.
+                // We'll render objects "flat" for now. A tree you stand ON TOP of looks weird.
+                // Usually we render: Ground -> Player -> Overhead (Roof/TreeTop)
+                // Or: Ground -> [Sorted Entities]
+                if (mapData.layers.objects[idx] !== 0) {
+                    drawTile(mapData.layers.objects[idx], x * renderTileSize, y * renderTileSize);
+                }
+            }
+        }
+
+        // Render Player
+        const playerScreenX = (playerPos.x - camX) * renderTileSize;
+        const playerScreenY = (playerPos.y - camY) * renderTileSize;
+
+        ctx.font = `${renderTileSize}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath();
+        ctx.ellipse(playerScreenX + renderTileSize / 2, playerScreenY + renderTileSize - 5, 10, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Icon
+        ctx.fillStyle = '#8b5cf6'; // Primary Purple
+        ctx.fillText('👤', playerScreenX + renderTileSize / 2, playerScreenY + renderTileSize / 2);
+
+    }, [mapData, tilesetImage, playerPos, isMobile]);
+
+    if (!mapData) return <div className="text-center p-10 text-gold font-medieval animate-pulse">Loading Map Realm...</div>;
 
     return (
-        <div className="h-full flex flex-col p-4">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-medieval text-gold flex items-center gap-2">
-                    <Navigation className="animate-pulse" /> {zone.name}
+        <div className="h-full flex flex-col p-2 sm:p-4">
+            <div className="flex justify-between items-center mb-4 px-2">
+                <h2 className="text-xl sm:text-2xl font-medieval text-gold flex items-center gap-2">
+                    <Navigation className="animate-pulse" size={isMobile ? 18 : 24} />
+                    {currentZoneId === 'town' ? 'Starter Town' : 'Wilderness'}
                 </h2>
                 <div className="flex gap-2">
-                    <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isConnected ? 'bg-success/10 border-success/30 text-success' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
+                    <div className={`px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold border ${isConnected ? 'bg-success/10 border-success/30 text-success' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
                         {isConnected ? 'ONLINE' : 'OFFLINE'}
                     </div>
                 </div>
             </div>
 
             <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden">
-                <div className="flex-1 glass-panel p-2 flex items-center justify-center bg-black/40 relative overflow-hidden min-h-[400px]">
-                    {/* Viewport Overlay Effects */}
-                    <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-t from-black/20 to-transparent" />
-
-                    <div
-                        style={{ width: viewportPx, height: viewportPx }}
-                        className="relative overflow-hidden rounded-xl border-2 border-white/5 shadow-2xl bg-dark/20"
-                    >
-                        {/* Map Surface */}
-                        <div
-                            style={{
-                                width: zone.gridSize * CELL_SIZE,
-                                height: zone.gridSize * CELL_SIZE,
-                                backgroundImage: `url(${zone.image})`,
-                                backgroundSize: 'cover',
-                                transform: `translate(${cameraX}px, ${cameraY}px)`,
-                                transition: 'transform 0.2s ease-out',
-                                position: 'absolute',
-                            }}
-                        >
-                            {/* Grid Dots */}
-                            <div className="absolute inset-0 pointer-events-none opacity-10" style={{ backgroundImage: `radial-gradient(circle, white 1px, transparent 1px)`, backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px` }} />
-
-                            {/* Entity Layer (Sorted) */}
-                            {entities.map((ent: any) => {
-                                // Depth effect: transparency if player is "behind"
-                                const isBehind = !ent.isPlayer && playerPos.x >= ent.x && playerPos.x < ent.x + ent.width && playerPos.y === ent.y - 1;
-                                const isOverlapping = !ent.isPlayer && playerPos.x >= ent.x && playerPos.x < ent.x + ent.width && playerPos.y >= ent.y && playerPos.y < ent.y + ent.height;
-
-                                return (
-                                    <div
-                                        key={ent.id}
-                                        className={`absolute flex items-center justify-center transition-all duration-300 ${ent.isPlayer ? 'z-20' : ''}`}
-                                        style={{
-                                            width: ent.width * CELL_SIZE,
-                                            height: ent.height * CELL_SIZE,
-                                            transform: `translate(${ent.x * CELL_SIZE}px, ${ent.y * CELL_SIZE}px)`,
-                                            fontSize: ent.isPlayer ? '2rem' : `${ent.width * 1.5}rem`,
-                                            opacity: (isBehind || isOverlapping) ? 0.6 : 1,
-                                            filter: ent.isPlayer ? 'drop-shadow(0 0 10px rgba(255,255,255,0.5))' : 'none'
-                                        }}
-                                    >
-                                        <div className={ent.isPlayer ? 'animate-bounce' : ''}>
-                                            {ent.icon || (ent.isPlayer ? <MapPin size={CELL_SIZE} className="text-primary" /> : '❓')}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                <div className="flex-1 glass-panel p-2 flex items-center justify-center bg-black/40 relative min-h-[350px]">
+                    <canvas
+                        ref={canvasRef}
+                        className="rounded-lg shadow-2xl border-2 border-white/10"
+                        style={{
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            imageRendering: 'pixelated'
+                        }}
+                    />
                 </div>
 
-                <div className="w-full lg:w-72 space-y-4 overflow-y-auto lg:overflow-visible pb-4 lg:pb-0">
+                <div className="w-full lg:w-72 space-y-4">
                     <div className="glass-panel p-5">
                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Zone Travel</label>
                         <select
                             className="w-full bg-dark/60 border border-white/10 rounded-lg p-3 text-sm focus:outline-none focus:border-primary"
                             value={currentZoneId}
-                            onChange={(e) => setCurrentZoneId(e.target.value)}
+                            onChange={(e) => {
+                                const newZone = e.target.value;
+                                setCurrentZoneId(newZone);
+                                if (profile) {
+                                    updateProfile({ ...profile, last_zone_id: newZone });
+                                }
+                            }}
                         >
                             <option value="town">🏡 Starter Town</option>
                             <option value="wild">🌲 The Wilderness</option>
                         </select>
+                        <p className="mt-4 text-xs text-gray-400 italic">
+                            {currentZoneId === 'town'
+                                ? "A safe haven. No monsters here."
+                                : "Dangerous lands. Tread carefully."}
+                        </p>
+                    </div>
 
-                        <div className="mt-6 space-y-2">
-                            <div className="flex justify-between text-xs font-mono">
-                                <span className="text-gray-500 uppercase">Danger</span>
-                                <span className="text-red-400">{'★'.repeat(zone.dangerLevel)}</span>
+                    {isMobile && (
+                        <div className="glass-panel p-5 flex flex-col items-center">
+                            <div className="grid grid-cols-3 gap-2">
+                                <div />
+                                <button onClick={() => move(0, -1)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowUp size={20} /></button>
+                                <div />
+                                <button onClick={() => move(-1, 0)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowLeft size={20} /></button>
+                                <div className="w-14 h-14 rounded-xl flex items-center justify-center text-gray-600 bg-black/20"><Navigation size={18} /></div>
+                                <button onClick={() => move(1, 0)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowRight size={20} /></button>
+                                <div />
+                                <button onClick={() => move(0, 1)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowDown size={20} /></button>
+                                <div />
                             </div>
-                            <p className="text-xs text-gray-400 italic leading-relaxed">
-                                {zone.description}
-                            </p>
+                            <div className="mt-6 text-[10px] font-mono text-gray-500 flex gap-4 uppercase">
+                                <span>COORD: {playerPos.x}, {playerPos.y}</span>
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="glass-panel p-5 flex flex-col items-center">
-                        <div className="grid grid-cols-3 gap-2">
-                            <div />
-                            <button onClick={() => move(0, -1)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowUp size={20} /></button>
-                            <div />
-                            <button onClick={() => move(-1, 0)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowLeft size={20} /></button>
-                            <div className="w-14 h-14 rounded-xl flex items-center justify-center text-gray-600 bg-black/20"><Navigation size={18} /></div>
-                            <button onClick={() => move(1, 0)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowRight size={20} /></button>
-                            <div />
-                            <button onClick={() => move(0, 1)} className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all outline-none border border-white/5"><ArrowDown size={20} /></button>
-                            <div />
-                        </div>
-                        <div className="mt-6 text-[10px] font-mono text-gray-500 flex gap-4 uppercase">
-                            <span>GRID: {zone.gridSize}x{zone.gridSize}</span>
-                            <span className="text-primary">X:{playerPos.x} Y:{playerPos.y}</span>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

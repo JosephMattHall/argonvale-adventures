@@ -22,7 +22,8 @@ class Companion(Base):
     xp = Column(Integer, default=0)
 
     # Management
-    status = Column(String, default="active")  # active, boarding
+    status = Column(String, default="active")  # active, boarding, training, expedition
+    busy_until = Column(DateTime, nullable=True) # For timer-based tasks
     is_active = Column(Boolean, default=True)  # In active party (max 4)
     created_at = Column(DateTime, default=datetime.utcnow)
 

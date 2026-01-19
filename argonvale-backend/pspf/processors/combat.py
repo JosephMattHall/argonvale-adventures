@@ -169,6 +169,7 @@ class CombatProcessor(BaseProcessor):
                 events.append(CombatEnded.create(
                     combat_id=session.combat_id,
                     winner_id=event.actor_id,
+                    mode=session.mode,
                     loot={"coins": random.randint(15, 30)},
                     dropped_item=dropped,
                     xp_gained=xp_gain
@@ -295,7 +296,9 @@ class CombatProcessor(BaseProcessor):
                  session.player_hp = 0
                  events.append(CombatEnded.create(
                     combat_id=session.combat_id,
-                    winner_id=0,
+                    winner_id=0, # AI wins
+                    mode=session.mode,
+                    xp_gained=0
                 ))
                  del self.sessions[session.combat_id]
             else:

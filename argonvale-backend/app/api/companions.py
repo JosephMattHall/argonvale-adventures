@@ -72,7 +72,7 @@ def create_starter_companion(
         name=starter_data.custom_name,
         species=starter_data.species,
         element=starter_data.element,
-        image_url=f"{starter_data.species.lower().replace(' ', '_')}.png",
+        image_url=creature.get("image_url", f"{starter_data.species.lower().replace(' ', '_')}.png"),
         strength=stats["STR"],
         defense=stats["DEF"],
         speed=stats.get("SPD", 10),
@@ -124,7 +124,7 @@ def summon_companion(
         name=summon_data.custom_name,
         species=summon_data.species,
         element=summon_data.element,
-        image_url=f"{summon_data.species.lower().replace(' ', '_')}.png",
+        image_url=creature.get("image_url", f"{summon_data.species.lower().replace(' ', '_')}.png"),
         strength=stats["STR"],
         defense=stats["DEF"],
         speed=stats.get("SPD", random.randint(5, 12)),
@@ -298,4 +298,38 @@ def heal_companion(
             "max_hp": companion.max_hp,
         },
         "coins_remaining": current_user.coins
+    }
+
+@router.delete("/{companion_id}")
+def abandon_companion(
+    companion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Permanently abandon a companion (cannot be undone)"""
+    # Get companion
+    companion = db.query(Companion).filter(
+        Companion.id == companion_id,
+        Companion.owner_id == current_user.id
+    ).first()
+    
+    if not companion:
+        raise HTTPException(status_code=404, detail="Companion not found")
+    
+    # Check if user has more than 1 companion
+    companion_count = db.query(Companion).filter(Companion.owner_id == current_user.id).count()
+    if companion_count <= 1:
+        raise HTTPException(status_code=400, detail="Cannot abandon your last companion")
+    
+    # Check if companion is currently training
+    if companion.status == "training":
+        raise HTTPException(status_code=400, detail="Cannot abandon a companion that is currently training")
+    
+    # Delete companion
+    companion_name = companion.name
+    db.delete(companion)
+    db.commit()
+    
+    return {
+        "message": f"{companion_name} has been released into the wild. Farewell, brave companion."
     }
