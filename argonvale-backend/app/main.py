@@ -11,6 +11,9 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Argonvale Backend")
 
+from starlette.middleware.sessions import SessionMiddleware
+from app.auth.security import SECRET_KEY
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,6 +21,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Auth & WebSocket
 app.include_router(auth_router.router, tags=["auth"])

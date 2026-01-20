@@ -18,6 +18,8 @@ export const GameSocketProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [messages, setMessages] = useState<any[]>([]);
     const [isConnected, setIsConnected] = useState(false);
 
+    const [commandQueue, setCommandQueue] = useState<object[]>([]);
+
     useEffect(() => {
         if (!token) return;
 
@@ -39,8 +41,11 @@ export const GameSocketProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // console.log("WS Recv:", data); // Reduce noise
-                    setMessages((prev) => [...prev, data]);
+                    if (Array.isArray(data)) {
+                        setMessages((prev) => [...prev, ...data]);
+                    } else {
+                        setMessages((prev) => [...prev, data]);
+                    }
                 } catch (e) {
                     console.error('Failed to parse WS message', e);
                 }
@@ -70,11 +75,23 @@ export const GameSocketProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
     }, [token]);
 
+    // Flus queue when connected
+    useEffect(() => {
+        if (isConnected && socket.current && commandQueue.length > 0) {
+            console.log(`Flushing ${commandQueue.length} queued commands`);
+            commandQueue.forEach(cmd => {
+                socket.current?.send(JSON.stringify(cmd));
+            });
+            setCommandQueue([]);
+        }
+    }, [isConnected, commandQueue]);
+
     const sendCommand = (command: object) => {
         if (socket.current && socket.current.readyState === WebSocket.OPEN) {
             socket.current.send(JSON.stringify(command));
         } else {
-            console.warn("Socket not connected, cannot send:", command);
+            console.log("Socket not ready, queuing command:", command);
+            setCommandQueue(prev => [...prev, command]);
         }
     };
 

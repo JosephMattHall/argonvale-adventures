@@ -10,6 +10,7 @@ class CombatSession:
     def __init__(self, event: CombatStarted):
         self.combat_id = event.combat_id
         self.attacker_id = event.attacker_id
+        self.defender_id = event.defender_id  # For PvP
         self.mode = event.mode
         
         # Player Stats
@@ -37,6 +38,10 @@ class CombatSession:
         
         # Tracking for used consumables (one-time use per battle)
         self.used_item_ids = set()
+        
+        # PvP: Track which player needs to act next
+        # In PvP, we wait for both players to submit actions before processing
+        self.waiting_for_player = None  # None = both can act, player_id = waiting for specific player
 
 class CombatProcessor(BaseProcessor):
     def __init__(self):

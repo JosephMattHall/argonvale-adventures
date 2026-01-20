@@ -49,12 +49,11 @@ const BattleSelection: React.FC = () => {
     useEffect(() => { loadData(); }, [profile]);
 
     useEffect(() => {
-        if (!isStarting) return;
+        if (!isStarting && !isQueuing) return;
         const newMessages = messages.slice(initialMsgCount);
         const combatStarted = newMessages.find((m: any) =>
             m.type === 'CombatStarted' &&
-            m.attacker_id === profile?.id &&
-            m.context?.companion_id === selectedCompanionId
+            (m.attacker_id === profile?.id || m.defender_id === profile?.id)
         );
 
         if (combatStarted) {
@@ -68,7 +67,14 @@ const BattleSelection: React.FC = () => {
                 }
             });
         }
-    }, [messages, profile, navigate, isStarting, initialMsgCount, selectedCompanionId]);
+
+        const errorMsg = newMessages.find((m: any) => m.type === 'Error');
+        if (errorMsg) {
+            alert(errorMsg.message);
+            setIsQueuing(false);
+            setIsStarting(false);
+        }
+    }, [messages, profile, navigate, isStarting, isQueuing, initialMsgCount, selectedCompanionId]);
 
     const handleToggleEquip = async (itemId: number) => {
         try {

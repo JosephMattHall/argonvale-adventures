@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useGameSocket } from '../hooks/useGameSocket';
-import { Routes, Route, Link, Navigate } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
     Sword,
@@ -30,11 +30,37 @@ import ErrorBoundary from '../components/ErrorBoundary';
 const AdminView = React.lazy(() => import('../features/admin/AdminView'));
 
 const GameLayout: React.FC = () => {
-    const { isConnected } = useGameSocket();
+    const { isConnected, messages } = useGameSocket();
     const { profile } = useUser();
+    const navigate = useNavigate();
+    const location = useLocation();
 
     // Auto-navigate to combat on encounter
 
+    // Auto-navigate to combat on PvP match (Global Listener)
+    useEffect(() => {
+        // Check the last few messages for a match event
+        const recentMessages = messages.slice(-5);
+        const combatStarted = recentMessages.find((m: any) =>
+            m.type === 'CombatStarted' &&
+            m.mode === 'pvp' &&
+            (m.attacker_id === profile?.id || m.defender_id === profile?.id)
+        );
+
+        if (combatStarted) {
+            // Check if we are already in battle to avoid loop/refresh issues
+            if (!location.pathname.includes('/game/battle')) {
+                console.log("Global Listener: PvP Match Found! Navigating...", combatStarted);
+                navigate('/game/battle', {
+                    state: {
+                        battleContext: combatStarted.context,
+                        combatId: combatStarted.combat_id,
+                        origin: '/game/battle-select' // Default fallback
+                    }
+                });
+            }
+        }
+    }, [messages, profile, navigate]);
 
     return (
         <div className="h-screen w-full flex flex-col bg-dark">

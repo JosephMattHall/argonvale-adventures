@@ -133,6 +133,15 @@ class GameServer:
         finally:
             db.close()
 
+    def get_active_sockets_for_user(self, user_id: int) -> List[WebSocket]:
+        sockets = []
+        for ws, session in self.active_connections.items():
+            if session.user_id == user_id:
+                from starlette.websockets import WebSocketState
+                if ws.client_state == WebSocketState.CONNECTED:
+                    sockets.append(ws)
+        return sockets
+        
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             session = self.active_connections[websocket]
@@ -146,8 +155,12 @@ class GameServer:
             
             # Unsubscribe and remove
             self.sync.unsubscribe(session.current_zone, websocket)
-            self.pvp_queue = [q for q in self.pvp_queue if q['websocket'] != websocket]
+            
+            # Remove from PvP Queue keys off user id now
+            self.pvp_queue = [q for q in self.pvp_queue if q['user_id'] != session.user_id]
+            
             del self.active_connections[websocket]
+
 
     async def handle_message(self, websocket: WebSocket, data: str):
         if websocket not in self.active_connections:
@@ -279,6 +292,14 @@ class GameServer:
                     owner_id=user_id,
                     species_name=payload.get("species_name")
                 ))
+
+            elif msg_type == "JoinPvPQueue":
+                companion_id = payload.get("companion_id")
+                if companion_id:
+                    input_events.append(JoinPvPQueue.create(
+                        player_id=user_id,
+                        companion_id=int(companion_id)
+                    ))
 
             elif msg_type == "EnterCombat":
                 # Arena Battle Start
@@ -431,25 +452,69 @@ class GameServer:
                     output_events.extend(self.combat.process(turn_state, event))
 
                 # PvP Matchmaking
+                # PvP Matchmaking
                 if isinstance(event, JoinPvPQueue):
+                    # Remove self from queue if already there (prevents self-matching)
+                    self.pvp_queue = [q for q in self.pvp_queue if q['user_id'] != user_id]
+                    
+                    match = None
+                    opp_sockets = []
+                    
                     if self.pvp_queue:
-                        match = self.pvp_queue.pop(0)
+                        # Find a valid opponent (dynamic socket lookup)
+                        while self.pvp_queue:
+                            candidate = self.pvp_queue.pop(0)
+                            opp_id = candidate['user_id']
+                            
+                            if opp_id == user_id:
+                                continue
+
+                            # Dynamic Socket Lookup - Get ALL active sockets
+                            opp_sockets = self.get_active_sockets_for_user(opp_id)
+                            
+                            if opp_sockets:
+                                # Found a live one!
+                                match = candidate
+                                break
+                            else:
+                                logger.info(f"User {opp_id} in queue is offline. Removing.")
+                    
+                    if not match:
+                        # Add ourselves to queue
+                        db = SessionLocal()
+                        u = db.query(User).get(user_id)
+                        self.pvp_queue.append({
+                            "user_id": user_id,
+                            # NO WEBSOCKET stored here
+                            "companion_id": event.companion_id,
+                            "username": u.username
+                        })
+                        db.close()
+                        await websocket.send_text(json.dumps([{"type": "Info", "message": "Searching for a rival..."}]))
+                    else:
+                        # Proceed with match (user_id vs match['user_id'])
                         opp_id = match['user_id']
-                        opp_ws = match['websocket']
-                        
                         combat_id = f"pvp_{random.randint(1000, 9999)}"
                         
-                        # Load data for both (simple for MVP)
+                        # Load data for both ...
                         db = SessionLocal()
                         try:
-                            # We send CombatStarted to BOTH
-                            # This is a bit tricky in the current loop, but we can emit manually
                             u1 = db.query(User).get(user_id)
                             u2 = db.query(User).get(opp_id)
-                            c1 = db.query(Companion).filter(Companion.owner_id == user_id, Companion.is_active == True).first()
-                            c2 = db.query(Companion).filter(Companion.owner_id == opp_id, Companion.is_active == True).first()
+                            
+                            # Use specific companion IDs from the queue events
+                            c1 = db.query(Companion).filter(Companion.id == event.companion_id, Companion.owner_id == user_id).first()
+                            c2 = db.query(Companion).filter(Companion.id == match['companion_id'], Companion.owner_id == opp_id).first()
                             
                             if c1 and c2:
+                                # ... (existing match logic) ...
+                                from app.models.item import Item as DBItem
+                                items1 = db.query(DBItem).filter(DBItem.owner_id == user_id, DBItem.is_equipped == True).all()
+                                items2 = db.query(DBItem).filter(DBItem.owner_id == opp_id, DBItem.is_equipped == True).all()
+                                
+                                equipped1 = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats, "effect": i.effect} for i in items1]
+                                equipped2 = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats, "effect": i.effect} for i in items2]
+
                                 # Start PvP Context
                                 context = {
                                     "mode": "pvp",
@@ -457,56 +522,71 @@ class GameServer:
                                     "p2_name": u2.username,
                                     "p1_companion": c1.name,
                                     "p2_companion": c2.name,
-                                    "enemy_name": u2.username, # For the frontend to re-use UI
+                                    "enemy_name": u2.username,
                                     "enemy_max_hp": c2.max_hp,
                                     "enemy_hp": c2.hp,
+                                    "enemy_stats": {"str": c2.strength, "def": c2.defense, "spd": c2.speed},
+                                    "enemy_weapons": equipped2,
                                     "player_max_hp": c1.max_hp,
                                     "player_hp": c1.hp,
+                                    "player_stats": {"str": c1.strength, "def": c1.defense, "spd": c1.speed},
                                     "companion_id": c1.id,
                                     "enemy_type": c2.element,
                                     "companion_name": c1.name,
-                                    "equipped_items": [] # Load these if needed
+                                    "companion_image": c1.image_url,
+                                    "enemy_image": c2.image_url,
+                                    "equipped_items": equipped1
                                 }
                                 
-                                evt1 = CombatStarted(combat_id=combat_id, attacker_id=user_id, defender_id=opp_id, mode="pvp", context=context)
+                                evt1 = CombatStarted.create(combat_id=combat_id, attacker_id=user_id, defender_id=opp_id, mode="pvp", context=context)
                                 
-                                # Opposite context for P2
                                 context2 = context.copy()
                                 context2.update({
                                     "enemy_name": u1.username,
+                                    "enemy_image": c1.image_url,
                                     "enemy_max_hp": c1.max_hp,
                                     "enemy_hp": c1.hp,
+                                    "enemy_stats": {"str": c1.strength, "def": c1.defense, "spd": c1.speed},
+                                    "enemy_weapons": equipped1,
                                     "player_max_hp": c2.max_hp,
                                     "player_hp": c2.hp,
+                                    "player_stats": {"str": c2.strength, "def": c2.defense, "spd": c2.speed},
                                     "companion_id": c2.id,
+                                    "companion_name": c2.name,
+                                    "companion_image": c2.image_url,
                                     "enemy_type": c1.element,
-                                    "companion_name": c2.name
+                                    "equipped_items": equipped2
                                 })
-                                evt2 = CombatStarted(combat_id=combat_id, attacker_id=opp_id, defender_id=user_id, mode="pvp", context=context2)
+                                evt2 = CombatStarted.create(combat_id=combat_id, attacker_id=opp_id, defender_id=user_id, mode="pvp", context=context2)
                                 
-                                # Send to P2 immediately
-                                import asyncio
-                                asyncio.create_task(opp_ws.send_text(json.dumps([evt2.model_dump()])))
+                                # Broadcast to ALL active sockets for opponent
+                                logger.info(f"Broadcasting match event to {len(opp_sockets)} active sockets for user {opp_id}")
+                                for ws in opp_sockets:
+                                    try:
+                                        await ws.send_text(json.dumps([evt2.model_dump(mode='json')]))
+                                    except Exception as e:
+                                        logger.error(f"Failed to send to one of user {opp_id}'s sockets: {e}")
                                 
                                 # Add to output for P1 (current user)
                                 output_events.append(evt1)
                                 
                                 # Register in combat processor
                                 self.combat.process(None, evt1)
+                            else:
+                                logger.warning(f"PvP Match Validation Failed: Invalid companions.")
+                                if not c1:
+                                     await websocket.send_text(json.dumps([{"type": "Error", "message": "Invalid companion selection."}]))
+                                     self.pvp_queue.insert(0, match)
+                                elif not c2:
+                                    self.pvp_queue.append({
+                                        "user_id": user_id,
+                                        "companion_id": event.companion_id,
+                                        "username": u1.username if u1 else "Unknown"
+                                    })
+                                    await websocket.send_text(json.dumps([{"type": "Info", "message": "Searching for a rival..."}]))
+
                         finally:
                             db.close()
-                    else:
-                        db = SessionLocal()
-                        u = db.query(User).get(user_id)
-                        self.pvp_queue.append({
-                            "user_id": user_id,
-                            "websocket": websocket,
-                            "companion_id": event.companion_id,
-                            "username": u.username if u else "Unknown"
-                        })
-                        db.close()
-                        # Notify player they are in queue
-                        await websocket.send_text(json.dumps([{"type": "Info", "message": "Searching for a rival..."}]))
 
             # 4. Feedback Loop & Persistence
             db = SessionLocal()
