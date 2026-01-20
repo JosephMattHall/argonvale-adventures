@@ -22,12 +22,22 @@ interface TilemapData {
 
 
 const ExplorationView: React.FC = () => {
-    const { profile, updateProfile } = useUser();
+    const { profile, updateProfile, loading } = useUser();
     const navigate = useNavigate();
     const { sendCommand, isConnected, messages } = useGameSocket();
 
     // State
     const [currentZoneId, setCurrentZoneId] = useState<string>(profile?.last_zone_id || 'town');
+
+    // Sync zone and position state after profile loads (fixes race condition)
+    useEffect(() => {
+        if (!loading && profile) {
+            if (profile.last_zone_id) setCurrentZoneId(profile.last_zone_id);
+            if (profile.last_x !== undefined && profile.last_y !== undefined) {
+                setPlayerPos({ x: profile.last_x, y: profile.last_y });
+            }
+        }
+    }, [loading, profile]);
     const [mapData, setMapData] = useState<TilemapData | null>(null);
     const [tilesetImage, setTilesetImage] = useState<HTMLImageElement | null>(null);
     const [playerPos, setPlayerPos] = useState({ x: profile?.last_x ?? 8, y: profile?.last_y ?? 8 });
@@ -40,30 +50,50 @@ const ExplorationView: React.FC = () => {
     const lastMoveTimeRef = useRef(0);
     const mapDataRef = useRef<TilemapData | null>(null);
 
-    // Initial Load & Zone Change
-    useEffect(() => {
-        // Sync Ref immediately when state changes
-        currentZoneIdRef.current = currentZoneId;
+    // Helper: Collision Check
+    const isSolid = (x: number, y: number) => {
+        if (!mapDataRef.current) return true;
+        const { width, height, layers } = mapDataRef.current;
+        if (x < 0 || x >= width || y < 0 || y >= height) return true;
+        return layers.collision[y * width + x] === 1;
+    };
 
-        const loadMap = async () => {
-            // ... existing loadMap code ...
-            // (omitted for brevity in this replace call, but we need to keep the content valid)
-            // Wait, replace_file_content replaces the WHOLE block. I need to be careful not to delete loadMap logic.
-            // Actually, I should split this into smaller edits or include the logic.
-            // Let's just update the Ref definition and the Sync effect separately.
-        };
-        // ...
-    }, [currentZoneId]);
+    // Movement Logic
+    const move = (dx: number, dy: number) => {
+        const now = Date.now();
+        if (now - lastMoveTimeRef.current < 150) return;
 
-    // Better strategy:
-    // 1. Update Refs definitions.
-    // 2. Update Sync Effect (or add new one).
-    // 3. Update move() function.
+        const currentPos = playerPosRef.current;
+        const nextX = currentPos.x + dx;
+        const nextY = currentPos.y + dy;
 
-    // Changing approach to multiple replace calls for safety or one big one if contiguous.
-    // The Refs overlap start at line 36.
-    // move() is at line 147.
-    // These are far apart. I should use multi_replace_file_content.
+        if (isSolid(nextX, nextY)) {
+            console.log("Movement Blocked at:", nextX, nextY);
+            // Blocked
+            // Could add "bump" sound or animation here
+            return;
+        }
+
+        lastMoveTimeRef.current = now;
+        setPlayerPos({ x: nextX, y: nextY });
+
+        if (profile) {
+            updateProfile({
+                ...profile,
+                last_x: nextX,
+                last_y: nextY,
+                last_zone_id: currentZoneIdRef.current
+            });
+        }
+
+        sendCommand({
+            type: "Move",
+            direction: { dx, dy },
+            zone_id: currentZoneIdRef.current
+        });
+    };
+
+
 
 
     // Initial Load & Zone Change
@@ -193,7 +223,7 @@ const ExplorationView: React.FC = () => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [move]);
 
     // Sync Ref
     useEffect(() => {
@@ -211,48 +241,7 @@ const ExplorationView: React.FC = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Helper: Collision Check
-    const isSolid = (x: number, y: number) => {
-        if (!mapDataRef.current) return true;
-        const { width, height, layers } = mapDataRef.current;
-        if (x < 0 || x >= width || y < 0 || y >= height) return true;
-        return layers.collision[y * width + x] === 1;
-    };
 
-    // Movement Logic
-    const move = (dx: number, dy: number) => {
-        const now = Date.now();
-        if (now - lastMoveTimeRef.current < 150) return;
-
-        const currentPos = playerPosRef.current;
-        const nextX = currentPos.x + dx;
-        const nextY = currentPos.y + dy;
-
-        if (isSolid(nextX, nextY)) {
-            console.log("Movement Blocked at:", nextX, nextY);
-            // Blocked
-            // Could add "bump" sound or animation here
-            return;
-        }
-
-        lastMoveTimeRef.current = now;
-        setPlayerPos({ x: nextX, y: nextY });
-
-        if (profile) {
-            updateProfile({
-                ...profile,
-                last_x: nextX,
-                last_y: nextY,
-                last_zone_id: currentZoneId
-            });
-        }
-
-        sendCommand({
-            type: "Move",
-            direction: { dx, dy },
-            zone_id: currentZoneIdRef.current
-        });
-    };
 
     // Render Loop
     useEffect(() => {
@@ -346,7 +335,15 @@ const ExplorationView: React.FC = () => {
 
     }, [mapData, tilesetImage, playerPos, isMobile]);
 
-    if (!mapData) return <div className="text-center p-10 text-gold font-medieval animate-pulse">Loading Map Realm...</div>;
+    if (loading || !mapData) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="text-center p-10 text-gold font-medieval animate-pulse">
+                    {loading ? 'Consulting the Stars...' : 'Loading Map Realm...'}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col p-2 sm:p-4">

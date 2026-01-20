@@ -207,39 +207,7 @@ const CombatView: React.FC = () => {
         }
     };
 
-    if (isBattleOver) {
-        return (
-            <div className="h-full flex flex-col items-center justify-center glass-panel animate-in fade-in zoom-in duration-500">
-                <div className="text-8xl mb-6 shadow-glow p-8 rounded-full bg-primary/10">
-                    {result === 'win' ? '🏆' : '💀'}
-                </div>
-                <h1 className={`text-6xl font-medieval mb-2 ${result === 'win' ? 'text-gold' : 'text-red-500'}`}>
-                    {result === 'win' ? 'VICTORY!' : 'DEFEAT'}
-                </h1>
-                {result === 'win' && (
-                    <div className="bg-primary/20 px-6 py-2 rounded-full border border-primary/30 text-gold font-bold mb-6 animate-pulse">
-                        +{xpGained} XP GAINED
-                    </div>
-                )}
-                <p className="text-xl text-gray-400 mb-8 max-w-md text-center">
-                    {result === 'win' ? 'Your companion proved its worth and gathered spoils!' : 'Your companion was overpowered. Regroup and try again.'}
-                </p>
-                <button
-                    onClick={() => {
-                        const origin = location.state?.origin;
-                        if (origin === 'exploration') {
-                            navigate('/game/explore');
-                        } else {
-                            navigate('/game/battle-select');
-                        }
-                    }}
-                    className="btn-primary px-12 py-4 text-xl hover:scale-105 transition-transform"
-                >
-                    {location.state?.origin === 'exploration' ? 'Continue Journey' : 'Return to Arena'}
-                </button>
-            </div>
-        );
-    }
+
 
     return (
         <div className="flex flex-col h-full gap-4 max-w-7xl mx-auto w-full overflow-y-auto pr-1 custom-scrollbar pb-24 lg:pb-0">
@@ -331,122 +299,162 @@ const CombatView: React.FC = () => {
 
             {/* Strategy & Gear Bar */}
             <div className="flex-none flex flex-col lg:flex-row gap-4 lg:h-72">
-                {/* 1. Stance Selection */}
-                <div className="glass-panel w-full lg:w-48 p-4 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
-                    <div className="text-[10px] font-bold text-gray-500 tracking-widest uppercase mb-1">Combat Stance</div>
-                    <button
-                        onClick={() => setCurrentStance('normal')}
-                        className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'normal' ? 'border-gold bg-gold/10' : 'border-white/5 hover:bg-white/5'}`}
-                    >
-                        <Zap size={18} className={currentStance === 'normal' ? 'text-gold' : 'text-gray-400'} />
-                        <span className="text-xs mt-1 font-bold">Normal</span>
-                    </button>
-                    <button
-                        onClick={() => setCurrentStance('berserk')}
-                        className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'berserk' ? 'border-red-500 bg-red-500/10' : 'border-white/5 hover:bg-white/5'}`}
-                    >
-                        <Flame size={18} className={currentStance === 'berserk' ? 'text-red-500' : 'text-gray-400'} />
-                        <span className="text-xs mt-1 font-bold">Berserk</span>
-                    </button>
-                    <button
-                        onClick={() => setCurrentStance('defensive')}
-                        className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'defensive' ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 hover:bg-white/5'}`}
-                    >
-                        <Shield size={18} className={currentStance === 'defensive' ? 'text-blue-500' : 'text-gray-400'} />
-                        <span className="text-xs mt-1 font-bold">Defend</span>
-                    </button>
-                </div>
+                {!isBattleOver ? (
+                    <>
+                        {/* 1. Stance Selection */}
+                        <div className="glass-panel w-full lg:w-48 p-4 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
+                            <div className="text-[10px] font-bold text-gray-500 tracking-widest uppercase mb-1">Combat Stance</div>
+                            <button
+                                onClick={() => setCurrentStance('normal')}
+                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'normal' ? 'border-gold bg-gold/10' : 'border-white/5 hover:bg-white/5'}`}
+                            >
+                                <Zap size={18} className={currentStance === 'normal' ? 'text-gold' : 'text-gray-400'} />
+                                <span className="text-xs mt-1 font-bold">Normal</span>
+                            </button>
+                            <button
+                                onClick={() => setCurrentStance('berserk')}
+                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'berserk' ? 'border-red-500 bg-red-500/10' : 'border-white/5 hover:bg-white/5'}`}
+                            >
+                                <Flame size={18} className={currentStance === 'berserk' ? 'text-red-500' : 'text-gray-400'} />
+                                <span className="text-xs mt-1 font-bold">Berserk</span>
+                            </button>
+                            <button
+                                onClick={() => setCurrentStance('defensive')}
+                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'defensive' ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 hover:bg-white/5'}`}
+                            >
+                                <Shield size={18} className={currentStance === 'defensive' ? 'text-blue-500' : 'text-gray-400'} />
+                                <span className="text-xs mt-1 font-bold">Defend</span>
+                            </button>
+                        </div>
 
-                {/* 2. Equipped Gear & Attack / Items */}
-                <div className="glass-panel flex-1 p-4 flex flex-col">
-                    <div className="flex justify-between items-center mb-4">
-                        <div className="flex gap-4">
+                        {/* 2. Equipped Gear & Attack / Items */}
+                        <div className="glass-panel flex-1 p-4 flex flex-col">
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => setActiveTab('weapons')}
+                                        className={`text-[10px] font-bold tracking-widest uppercase pb-1 border-b-2 transition-all ${activeTab === 'weapons' ? 'border-primary text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                    >
+                                        Weapons
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('items')}
+                                        className={`text-[10px] font-bold tracking-widest uppercase pb-1 border-b-2 transition-all ${activeTab === 'items' ? 'border-primary text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                    >
+                                        Items
+                                    </button>
+                                </div>
+                                <div className="text-[10px] font-mono text-gold">
+                                    {activeTab === 'weapons' ? `${selectedWeapons.length}/2 Picked` : 'Consumables'}
+                                </div>
+                            </div>
+
+                            <div className="flex-1 flex gap-2 items-center">
+                                <div className="flex-1 grid grid-cols-4 lg:grid-cols-8 gap-2">
+                                    {activeTab === 'weapons' ? (
+                                        <>
+                                            {equippedItems.filter(i => i.item_type !== 'potion').map(item => (
+                                                <div
+                                                    key={item.id}
+                                                    onClick={() => toggleWeapon(item.id)}
+                                                    className={`
+                                                        aspect-square rounded-lg border flex flex-col items-center justify-center cursor-pointer transition-all p-1
+                                                        ${selectedWeapons.includes(item.id) ? 'border-primary bg-primary/20 scale-105 shadow-glow z-10' : 'border-white/5 bg-black/20 hover:bg-white/5'}
+                                                    `}
+                                                >
+                                                    <Sword size={20} className={selectedWeapons.includes(item.id) ? 'text-primary' : 'opacity-50'} />
+                                                    <div className="text-[7px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
+                                                    <div className="flex gap-1 mt-1">
+                                                        {(Object.entries(item.stats?.atk || {}) as [string, number][]).map(([type, val]) => (
+                                                            <span key={type} className="text-[6px] px-1 bg-primary/20 rounded text-primary font-bold">
+                                                                {val} {type[0].toUpperCase()}
+                                                            </span>
+                                                        ))}
+                                                        {(Object.entries(item.stats?.def || {}) as [string, number][]).map(([type, val]) => (
+                                                            <span key={type} className="text-[6px] px-1 bg-blue-500/20 rounded text-blue-400 font-bold">
+                                                                {val} D
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {[...Array(Math.max(0, 8 - equippedItems.filter(i => i.item_type !== 'potion').length))].map((_, i) => (
+                                                <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10">
+                                                    <div className="w-2 h-2 rounded-full bg-white/5" />
+                                                </div>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {equippedItems.filter(i => i.item_type === 'potion').map(item => (
+                                                <div
+                                                    key={item.id}
+                                                    onClick={() => handleUseItem(item.id)}
+                                                    className="aspect-square rounded-lg border border-white/5 bg-black/20 hover:bg-primary/20 hover:border-primary cursor-pointer transition-all flex flex-col items-center justify-center group"
+                                                >
+                                                    <Zap size={24} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+                                                    <div className="text-[8px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
+                                                </div>
+                                            ))}
+                                            {[...Array(Math.max(0, 8 - equippedItems.filter(i => i.item_type === 'potion').length))].map((_, i) => (
+                                                <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10">
+                                                    <div className="w-2 h-2 rounded-full bg-white/5" />
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
+                                </div>
+
+                                {activeTab === 'weapons' && (
+                                    <button
+                                        onClick={handleAttack}
+                                        disabled={selectedWeapons.length === 0}
+                                        className="h-full aspect-square btn-primary rounded-xl flex flex-col items-center justify-center gap-2 hover:scale-105 transition-transform disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
+                                    >
+                                        <Sword size={32} className="group-hover:rotate-12 transition-transform" />
+                                        <span className="font-medieval font-bold text-lg tracking-widest">STRIKE</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="glass-panel flex-1 p-6 flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500 bg-primary/5 border-primary/30">
+                        <div className="flex items-center gap-6">
+                            <div className="text-6xl shadow-glow p-4 rounded-full bg-primary/10">
+                                {result === 'win' ? '🏆' : '💀'}
+                            </div>
+                            <div className="text-left">
+                                <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : 'text-red-500'}`}>
+                                    {result === 'win' ? 'VICTORY!' : 'DEFEAT'}
+                                </h2>
+                                {result === 'win' && (
+                                    <div className="text-gold font-bold animate-pulse text-lg">
+                                        +{xpGained} XP GAINED
+                                    </div>
+                                )}
+                            </div>
                             <button
-                                onClick={() => setActiveTab('weapons')}
-                                className={`text-[10px] font-bold tracking-widest uppercase pb-1 border-b-2 transition-all ${activeTab === 'weapons' ? 'border-primary text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                onClick={() => {
+                                    const origin = location.state?.origin;
+                                    if (origin === 'exploration') {
+                                        navigate('/game/explore');
+                                    } else {
+                                        navigate('/game/battle-select');
+                                    }
+                                }}
+                                className="btn-primary px-8 py-3 text-lg hover:scale-105 transition-transform ml-4"
                             >
-                                Weapons
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('items')}
-                                className={`text-[10px] font-bold tracking-widest uppercase pb-1 border-b-2 transition-all ${activeTab === 'items' ? 'border-primary text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-                            >
-                                Items
+                                {location.state?.origin === 'exploration' ? 'Continue Journey' : 'Return to Arena'}
                             </button>
                         </div>
-                        <div className="text-[10px] font-mono text-gold">
-                            {activeTab === 'weapons' ? `${selectedWeapons.length}/2 Picked` : 'Consumables'}
-                        </div>
+                        <p className="text-sm text-gray-400 mt-4 max-w-lg text-center italic">
+                            {result === 'win'
+                                ? 'Your companion proved its worth and gathered spoils! The journey continues.'
+                                : 'Your companion was overpowered. Regroup at the nearest haven and try again.'}
+                        </p>
                     </div>
-
-                    <div className="flex-1 flex gap-2 items-center">
-                        <div className="flex-1 grid grid-cols-4 lg:grid-cols-8 gap-2">
-                            {activeTab === 'weapons' ? (
-                                <>
-                                    {equippedItems.filter(i => i.item_type !== 'potion').map(item => (
-                                        <div
-                                            key={item.id}
-                                            onClick={() => toggleWeapon(item.id)}
-                                            className={`
-                                                aspect-square rounded-lg border flex flex-col items-center justify-center cursor-pointer transition-all p-1
-                                                ${selectedWeapons.includes(item.id) ? 'border-primary bg-primary/20 scale-105 shadow-glow z-10' : 'border-white/5 bg-black/20 hover:bg-white/5'}
-                                            `}
-                                        >
-                                            <Sword size={20} className={selectedWeapons.includes(item.id) ? 'text-primary' : 'opacity-50'} />
-                                            <div className="text-[7px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
-                                            <div className="flex gap-1 mt-1">
-                                                {(Object.entries(item.stats?.atk || {}) as [string, number][]).map(([type, val]) => (
-                                                    <span key={type} className="text-[6px] px-1 bg-primary/20 rounded text-primary font-bold">
-                                                        {val} {type[0].toUpperCase()}
-                                                    </span>
-                                                ))}
-                                                {(Object.entries(item.stats?.def || {}) as [string, number][]).map(([type, val]) => (
-                                                    <span key={type} className="text-[6px] px-1 bg-blue-500/20 rounded text-blue-400 font-bold">
-                                                        {val} D
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {[...Array(Math.max(0, 8 - equippedItems.filter(i => i.item_type !== 'potion').length))].map((_, i) => (
-                                        <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10">
-                                            <div className="w-2 h-2 rounded-full bg-white/5" />
-                                        </div>
-                                    ))}
-                                </>
-                            ) : (
-                                <>
-                                    {equippedItems.filter(i => i.item_type === 'potion').map(item => (
-                                        <div
-                                            key={item.id}
-                                            onClick={() => handleUseItem(item.id)}
-                                            className="aspect-square rounded-lg border border-white/5 bg-black/20 hover:bg-primary/20 hover:border-primary cursor-pointer transition-all flex flex-col items-center justify-center group"
-                                        >
-                                            <Zap size={24} className="text-emerald-400 group-hover:scale-110 transition-transform" />
-                                            <div className="text-[8px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
-                                        </div>
-                                    ))}
-                                    {[...Array(Math.max(0, 8 - equippedItems.filter(i => i.item_type === 'potion').length))].map((_, i) => (
-                                        <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10">
-                                            <div className="w-2 h-2 rounded-full bg-white/5" />
-                                        </div>
-                                    ))}
-                                </>
-                            )}
-                        </div>
-
-                        {activeTab === 'weapons' && (
-                            <button
-                                onClick={handleAttack}
-                                disabled={selectedWeapons.length === 0}
-                                className="h-full aspect-square btn-primary rounded-xl flex flex-col items-center justify-center gap-2 hover:scale-105 transition-transform disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
-                            >
-                                <Sword size={32} className="group-hover:rotate-12 transition-transform" />
-                                <span className="font-medieval font-bold text-lg tracking-widest">STRIKE</span>
-                            </button>
-                        )}
-                    </div>
-                </div>
+                )}
 
                 {/* 3. Combat Log */}
                 <div className="glass-panel w-full lg:w-80 p-4 overflow-y-auto font-mono text-[10px] flex flex-col-reverse custom-scrollbar h-48 lg:h-auto">

@@ -61,7 +61,7 @@ const ShopView: React.FC = () => {
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                 {items.map((item) => (
                     <div key={item.id} className="glass-panel hover:border-gold/50 transition-all group overflow-hidden flex flex-col">
                         <div className="p-4 bg-dark/50 border-b border-border-subtle flex justify-between items-start">

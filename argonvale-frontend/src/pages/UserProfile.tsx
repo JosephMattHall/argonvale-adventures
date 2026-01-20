@@ -136,7 +136,7 @@ const UserProfile: React.FC = () => {
                 <div className="space-y-4">
                     <h3 className="text-xl font-medieval text-white">Active Companions</h3>
                     {companions.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                             {companions.map((companion) => (
                                 <CompanionCard key={companion.id} companion={companion} />
                             ))}

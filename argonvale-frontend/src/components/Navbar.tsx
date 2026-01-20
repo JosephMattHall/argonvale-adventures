@@ -57,7 +57,7 @@ const Navbar: React.FC = () => {
 
                 <div className="flex items-center gap-2 sm:gap-4 border-l border-border-subtle pl-3 sm:pl-6">
                     <Link to="/game/profile/me" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
-                        <div className="text-right hidden sm:block">
+                        <div className="text-right">
                             <div className="text-sm font-semibold text-white">{profile.username}</div>
                             <div className="text-[10px] text-gray-400 capitalize">{profile.bio ? 'Explorer' : 'New Player'}</div>
                         </div>
