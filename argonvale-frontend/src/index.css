@@ -55,6 +55,24 @@
     @apply bg-danger hover:bg-danger-dark text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
 }
 
+@utility btn-red-battle {
+    @apply bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg lg:rounded-xl transition-all duration-300 border border-red-400/30;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+
+    &:hover {
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.4);
+    }
+}
+
+@utility btn-blue-battle {
+    @apply bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg lg:rounded-xl transition-all duration-300 border border-blue-400/30;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+
+    &:hover {
+        box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+    }
+}
+
 @utility input-field {
     @apply bg-dark-lighter border border-border text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary;
 }

@@ -4,7 +4,7 @@ import { useUser } from '../../context/UserContext';
 import { profilesApi, type Companion } from '../../api/profiles';
 import { equipmentApi, type Item } from '../../api/equipment';
 import { useGameSocket } from '../../hooks/useGameSocket';
-import { Swords, Zap, Shield, Heart, Skull, Package, Utensils, Sparkles, ChevronRight, Snowflake } from 'lucide-react';
+import { Swords, Zap, Shield, Skull, Package, Sparkles, ChevronRight, Snowflake } from 'lucide-react';
 
 const BattleSelection: React.FC = () => {
     const navigate = useNavigate();
@@ -118,78 +118,88 @@ const BattleSelection: React.FC = () => {
     }, 0);
 
     return (
-        <div className="h-full flex flex-col p-4 lg:p-6 overflow-hidden bg-gradient-to-br from-black to-[#0a0a0c]">
+        <div className="h-full flex flex-col p-3 lg:p-6 overflow-y-auto custom-scrollbar bg-black text-white relative">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.05),transparent)] pointer-events-none" />
             {/* Header */}
-            <header className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl lg:text-3xl font-medieval text-gold flex items-center gap-3">
-                    <Swords className="text-primary" size={32} />
-                    {isEncounterMode ? 'Battle Preparation' : 'Arena Entrance'}
-                </h2>
+            <header className="flex justify-between items-center mb-4 lg:mb-8 shrink-0 relative z-10">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="p-2 hover:bg-white/5 rounded-lg border border-white/5 transition-colors group"
+                    >
+                        <ChevronRight className="rotate-180 text-gray-500 group-hover:text-white" size={20} />
+                    </button>
+                    <div>
+                        <h2 className="text-xl lg:text-3xl font-medieval text-gold flex items-center gap-3 leading-none">
+                            <Swords className="text-primary" size={24} />
+                            {isEncounterMode ? 'Battle Order' : 'The Arena'}
+                        </h2>
+                        <div className="text-[8px] lg:text-[10px] text-gray-500 uppercase tracking-widest mt-1 font-bold">Prepare your forces for glory</div>
+                    </div>
+                </div>
                 {isEncounterMode && (
-                    <div className="px-4 py-1.5 bg-red-950/20 border border-red-500/30 rounded-full text-[10px] text-red-400 font-bold uppercase tracking-widest animate-pulse">
-                        Wild Objective Identified
+                    <div className="px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full text-[8px] lg:text-[10px] text-red-500 font-bold uppercase tracking-widest">
+                        Objective Identified
                     </div>
                 )}
             </header>
 
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 flex-1 min-h-0">
                 {/* Left Panel: Hero Selection & Setup */}
-                <div className="lg:col-span-5 flex flex-col gap-6 overflow-hidden">
-                    <section className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4 flex items-center justify-between">
-                            Active Roster
-                            <span className="text-gray-700">{companions.length} Available</span>
-                        </h3>
-                        <div className="space-y-2">
+                <div className="lg:col-span-5 flex flex-col gap-4 lg:gap-6 min-h-0">
+                    <section className="flex-none lg:flex-1 overflow-visible">
+                        <div className="flex items-center justify-between mb-3 px-1">
+                            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Active Roster</h3>
+                            <span className="text-[9px] text-gray-600 font-bold uppercase">{companions.length} Available</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
                             {companions.map(comp => (
                                 <div
                                     key={comp.id}
                                     onClick={() => setSelectedCompanionId(comp.id)}
                                     className={`
-                                        glass-panel p-3 cursor-pointer transition-all flex items-center gap-3 border
+                                        glass-panel p-2 lg:p-3 cursor-pointer transition-all flex items-center gap-3 border group/item
                                         ${selectedCompanionId === comp.id ? 'border-primary bg-primary/10 shadow-glow-primary/5' : 'border-white/5 hover:border-white/10 hover:bg-white/5'}
                                     `}
                                 >
-                                    <div className="w-14 h-14 bg-dark rounded flex items-center justify-center overflow-hidden border border-white/10 shadow-inner group">
-                                        <img src={`/companions/${comp.image_url}`} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                    <div className={`w-12 h-12 lg:w-14 lg:h-14 rounded-lg flex items-center justify-center overflow-hidden border transition-all ${selectedCompanionId === comp.id ? 'border-primary/50' : 'border-white/10 bg-black/40'}`}>
+                                        <img src={`/companions/${comp.image_url}`} alt="" className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-start">
-                                            <span className="font-medieval text-white text-sm truncate">{comp.name}</span>
-                                            <span className="text-[9px] text-gray-400 font-bold">LVL {comp.level}</span>
+                                        <div className="flex justify-between items-baseline mb-1">
+                                            <span className="font-medieval text-white text-xs lg:text-sm truncate pr-2">{comp.name}</span>
+                                            <span className="text-[8px] lg:text-[10px] text-gray-500 font-bold shrink-0">L{comp.level}</span>
                                         </div>
-                                        <div className="flex items-center gap-3 mt-1.5">
-                                            <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
-                                                <div className="h-full bg-red-500/80 shadow-[0_0_5px_rgba(239,68,68,0.5)]" style={{ width: `${(comp.hp / comp.max_hp) * 100}%` }} />
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 h-1 bg-black/60 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gradient-to-r from-red-600 to-red-400" style={{ width: `${(comp.hp / comp.max_hp) * 100}%` }} />
+                                                </div>
+                                                <span className="text-[8px] font-mono text-red-500 font-bold w-4">{comp.hp}</span>
                                             </div>
-                                            <div className="flex items-center gap-1 text-[9px] text-gray-300 font-mono">
-                                                <Heart size={10} className="text-red-500" /> {comp.hp}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-1">
-                                            <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
-                                                <div className="h-full bg-orange-500/80 shadow-[0_0_5px_rgba(249,115,22,0.5)]" style={{ width: `${comp.hunger || 0}%` }} />
-                                            </div>
-                                            <div className="flex items-center gap-1 text-[9px] text-gray-300 font-mono">
-                                                <Utensils size={10} className="text-orange-400" /> {comp.hunger || 0}%
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 h-1 bg-black/60 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gradient-to-r from-orange-600 to-orange-400" style={{ width: `${comp.hunger || 0}%` }} />
+                                                </div>
+                                                <span className="text-[8px] font-mono text-orange-400 font-bold w-4">{comp.hunger || 0}</span>
                                             </div>
                                         </div>
                                     </div>
-                                    <ChevronRight size={14} className={selectedCompanionId === comp.id ? "text-primary" : "text-gray-700"} />
+                                    <ChevronRight size={14} className={`transition-transform ${selectedCompanionId === comp.id ? "text-primary translate-x-1" : "text-gray-800"}`} />
                                 </div>
                             ))}
                         </div>
                     </section>
 
-                    {/* Battle Loadout - 5 Slots */}
-                    <section className="glass-panel p-4 pb-5 bg-[#0e0e11] border-gold/10">
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gold flex items-center gap-2">
-                                <Sparkles size={12} />
-                                Strategic Loadout (Max 8)
+                    <section className="glass-panel p-3 lg:p-5 bg-[#0e0e11] border-white/5 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+                        <div className="flex justify-between items-center mb-3 lg:mb-5 relative z-10">
+                            <h4 className="text-[9px] lg:text-[10px] font-bold uppercase tracking-[0.2em] text-gold flex items-center gap-2 font-medieval">
+                                <Sparkles size={14} className="text-primary" />
+                                Battle Loadout
                             </h4>
-                            <div className="text-[9px] text-gray-500 font-bold uppercase">
-                                {equippedItems.length} / 8 Slots filled
+                            <div className="text-[8px] lg:text-[9px] text-gray-500 font-bold uppercase tracking-tighter">
+                                {equippedItems.length} / 8 Equipped
                             </div>
                         </div>
 
@@ -313,32 +323,44 @@ const BattleSelection: React.FC = () => {
                         </div>
 
                         {/* Power Summary */}
-                        <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="text-[9px] uppercase font-bold text-gray-500">Total STR Bonus</div>
-                                <div className="text-sm font-medieval text-red-500">+{totalBonusAtk}</div>
+                        <div className="mt-4 pt-4 border-t border-white/5 flex gap-6 relative z-10">
+                            <div className="flex items-center gap-2">
+                                <Swords size={12} className="text-red-500" />
+                                <div>
+                                    <div className="text-[8px] uppercase font-bold text-gray-500 leading-none mb-1">Offense</div>
+                                    <div className="text-xs lg:text-sm font-medieval text-white">+{totalBonusAtk}</div>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <div className="text-[9px] uppercase font-bold text-gray-500">Total DEF Bonus</div>
-                                <div className="text-sm font-medieval text-blue-400">+{totalBonusDef}</div>
+                            <div className="flex items-center gap-2">
+                                <Shield size={12} className="text-blue-400" />
+                                <div>
+                                    <div className="text-[8px] uppercase font-bold text-gray-500 leading-none mb-1">Defense</div>
+                                    <div className="text-xs lg:text-sm font-medieval text-white">+{totalBonusDef}</div>
+                                </div>
                             </div>
                         </div>
                     </section>
                 </div>
 
                 {/* Right Panel: Enemy/Lobby Info */}
-                <div className="lg:col-span-7 flex flex-col min-h-0 relative">
+                <div className="lg:col-span-7 flex flex-col min-h-[400px] lg:min-h-0">
                     {isEncounterMode ? (
-                        <div className="glass-panel p-8 lg:p-12 flex flex-col items-center justify-center gap-8 border-red-500/20 bg-gradient-to-b from-red-950/10 to-transparent flex-1">
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-500 mb-2">Hostile Entities Detected</p>
-                                <h3 className="text-3xl font-medieval text-white">{encounterContext.enemy_name}</h3>
+                        <div className="glass-panel p-6 lg:p-12 flex flex-col items-center justify-center gap-6 lg:gap-10 border-red-500/10 bg-gradient-to-b from-red-950/20 via-transparent to-transparent flex-1 relative overflow-hidden group">
+                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+
+                            <div className="text-center relative z-10">
+                                <div className="flex items-center justify-center gap-2 mb-3 bg-red-500/10 px-4 py-1.5 rounded-full border border-red-500/20 mx-auto w-fit">
+                                    <Skull size={14} className="text-red-500 animate-pulse" />
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400 leading-none">High Threat Level</p>
+                                </div>
+                                <h3 className="text-2xl lg:text-5xl font-medieval text-white lg:tracking-tight group-hover:scale-105 transition-transform duration-700">{encounterContext.enemy_name}</h3>
                             </div>
 
-                            <div className="relative group">
-                                <div className="absolute inset-0 bg-red-500/20 rounded-full blur-[40px] animate-pulse-slow group-hover:bg-red-500/40 transition-all" />
-                                <div className="w-40 h-40 bg-dark rounded-full flex items-center justify-center border-4 border-red-500/30 shadow-[0_0_50px_rgba(239,68,68,0.3)] relative z-10 transition-transform group-hover:scale-105">
-                                    <span className="text-7xl">
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-red-500/10 rounded-full blur-[80px] animate-pulse-slow scale-150" />
+                                <div className="w-32 h-32 lg:w-56 lg:h-56 bg-black/40 rounded-full flex items-center justify-center border-2 lg:border-4 border-red-500/20 shadow-2xl relative z-10 overflow-hidden">
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.2),transparent_70%)]" />
+                                    <span className="text-6xl lg:text-9xl relative drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">
                                         {encounterContext.enemy_type === 'Fire' ? '🔥' :
                                             encounterContext.enemy_type === 'Water' ? '💧' :
                                                 encounterContext.enemy_type === 'Earth' ? '🗿' : '👹'}
@@ -346,55 +368,59 @@ const BattleSelection: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-12 text-center w-full max-w-sm">
-                                <div>
-                                    <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">Combat Level</div>
-                                    <div className="text-2xl font-medieval text-white flex items-center justify-center gap-2">
-                                        <Skull size={18} className="text-red-500" />
-                                        {encounterContext.enemy_level || 1}
-                                    </div>
+                            <div className="grid grid-cols-2 gap-8 lg:gap-20 text-center relative z-10">
+                                <div className="space-y-1">
+                                    <div className="text-[10px] lg:text-xs uppercase font-bold text-red-900 tracking-widest">Enemy LvL</div>
+                                    <div className="text-xl lg:text-4xl font-medieval text-white tabular-nums">{encounterContext.enemy_level || 1}</div>
                                 </div>
-                                <div>
-                                    <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">Vitality</div>
-                                    <div className="text-2xl font-medieval text-white flex items-center justify-center gap-2">
-                                        <Heart size={18} className="text-emerald-500" />
-                                        {encounterContext.enemy_hp}
-                                    </div>
+                                <div className="space-y-1">
+                                    <div className="text-[10px] lg:text-xs uppercase font-bold text-red-900 tracking-widest">Resistance</div>
+                                    <div className="text-xl lg:text-4xl font-medieval text-white tabular-nums">{encounterContext.enemy_hp} HP</div>
                                 </div>
                             </div>
 
                             <button
                                 disabled={selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting}
                                 onClick={handleStartEncounter}
-                                className="w-full max-w-md btn-primary py-5 text-xl font-medieval shadow-glow-primary/40 hover:scale-[1.02] transition-all disabled:opacity-50 disabled:scale-100"
+                                className="w-full max-w-sm btn-red-battle py-4 lg:py-6 text-xl lg:text-2xl font-medieval relative z-10 group/btn"
                             >
-                                {isStarting ? 'Engaging Battle...' : 'COMMENCE ATTACK'}
+                                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover/btn:opacity-100 transition-opacity" />
+                                {isStarting ? 'Summoning Forces...' : 'STRIKE TARGET'}
                             </button>
                         </div>
                     ) : (
-                        <div className="glass-panel p-8 lg:p-12 flex flex-col items-center justify-center gap-8 border-blue-500/10 bg-gradient-to-b from-blue-950/10 to-transparent flex-1">
-                            <div className="text-center space-y-2">
-                                <h3 className="text-3xl font-medieval text-white">The Great Arena</h3>
-                                <p className="text-xs text-gray-500 max-w-md mx-auto uppercase tracking-widest leading-relaxed">
-                                    Face the champions of other regions and claim your place in the high logs of history.
+                        <div className="glass-panel p-6 lg:p-12 flex flex-col items-center justify-center gap-8 lg:gap-12 border-blue-500/10 bg-gradient-to-b from-blue-950/20 via-transparent to-transparent flex-1 relative overflow-hidden group">
+                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
+
+                            <div className="text-center space-y-3 relative z-10">
+                                <h3 className="text-2xl lg:text-5xl font-medieval text-white lg:tracking-tight group-hover:scale-105 transition-transform duration-700">The Grand Arena</h3>
+                                <p className="text-[10px] lg:text-[11px] text-gray-500 max-w-xs mx-auto uppercase tracking-[0.3em] font-bold leading-relaxed opacity-60">
+                                    Challenge the legends of Argonvale and rise to glory
                                 </p>
                             </div>
 
-                            <div className="w-40 h-40 rounded-full bg-blue-500/5 flex items-center justify-center border border-blue-500/20 relative shadow-[0_0_40px_rgba(59,130,246,0.1)]">
-                                <Swords size={64} className="text-blue-400 group-hover:rotate-12 transition-transform" />
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-blue-500/10 rounded-full blur-[80px] animate-pulse-slow scale-150" />
+                                <div className="w-32 h-32 lg:w-56 lg:h-56 bg-black/40 rounded-full flex items-center justify-center border-2 lg:border-4 border-blue-500/20 shadow-2xl relative z-10">
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1),transparent_70%)]" />
+                                    <Swords size={60} className="text-blue-400 group-hover:rotate-12 transition-transform duration-500" />
+                                </div>
                             </div>
 
                             <button
                                 disabled={selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting || isQueuing}
                                 onClick={handleJoinQueue}
-                                className="w-full max-w-md btn-gold py-5 text-xl font-medieval shadow-glow-gold/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                                className="w-full max-w-sm btn-blue-battle py-4 lg:py-6 text-xl lg:text-2xl font-medieval relative z-10 group/btn"
                             >
-                                <Zap className={`inline mr-3 ${isQueuing ? 'animate-spin' : ''}`} />
-                                {isQueuing ? 'Seeking Challenger...' : 'ENTER PVP QUEUE'}
+                                {isQueuing ? (
+                                    <div className="flex items-center justify-center gap-3">
+                                        <Zap className="animate-spin text-blue-300" size={24} />
+                                        <span>Searching...</span>
+                                    </div>
+                                ) : 'JOIN PVP QUEUE'}
                             </button>
                         </div>
                     )}
-
                 </div>
             </div>
         </div>
