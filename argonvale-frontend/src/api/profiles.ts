@@ -12,6 +12,7 @@ export interface Profile {
     username: string;
     bio: string;
     avatar_url: string;
+    role: string;
     coins: number;
     has_starter: boolean;
     last_x: number;
@@ -35,6 +36,8 @@ export interface Companion {
     speed: number;
     is_active: boolean;
     status: string;
+    hunger: number;
+    last_fed_at: string;
 }
 
 export const profilesApi = {

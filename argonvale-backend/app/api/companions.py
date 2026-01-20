@@ -7,6 +7,8 @@ from app.auth.security import get_current_user
 from pydantic import BaseModel
 from typing import List
 import json
+from datetime import datetime
+from app.schemas.companion import CompanionResponse
 
 import random
 
@@ -17,22 +19,6 @@ class StarterCreate(BaseModel):
     custom_name: str
     element: str  # e.g., "Fire"
 
-class CompanionResponse(BaseModel):
-    id: int
-    name: str
-    species: str
-    element: str
-    image_url: str
-    level: int
-    hp: int
-    max_hp: int
-    strength: int
-    defense: int
-    speed: int
-    is_active: bool
-    
-    class Config:
-        from_attributes = True
 
 # Load creature data
 with open("app/data/creatures.json", "r") as f:

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameSocket } from '../hooks/useGameSocket';
-import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
     Sword,
@@ -23,11 +23,15 @@ import LeaderboardView from '../features/social/LeaderboardView';
 import MyProfile from '../pages/MyProfile';
 import UserProfile from '../pages/UserProfile';
 import Messages from '../pages/Messages';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Shield } from 'lucide-react';
+import { useUser } from '../context/UserContext';
+import ErrorBoundary from '../components/ErrorBoundary';
+
+const AdminView = React.lazy(() => import('../features/admin/AdminView'));
 
 const GameLayout: React.FC = () => {
-    const { isConnected, messages } = useGameSocket();
-    const navigate = useNavigate();
+    const { isConnected } = useGameSocket();
+    const { profile } = useUser();
 
     // Auto-navigate to combat on encounter
 
@@ -66,6 +70,11 @@ const GameLayout: React.FC = () => {
                         <Link to="/game/leaderboard" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
                             <Trophy size={18} className="text-gold" /> Hall of Heroes
                         </Link>
+                        {profile?.role === 'admin' && (
+                            <Link to="/game/admin" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2 border-t border-white/5 mt-4 pt-4">
+                                <Shield size={18} className="text-primary" /> Admin Citadel
+                            </Link>
+                        )}
                     </nav>
 
                     <div className="p-4 border-t border-border-subtle text-xs">
@@ -80,22 +89,31 @@ const GameLayout: React.FC = () => {
 
                 <main className="flex-1 glass-panel m-2 lg:ml-0 overflow-auto mb-20 lg:mb-2">
                     <div className="h-full p-4">
-                        <Routes>
-                            <Route path="battle-select" element={<BattleSelection />} />
-                            <Route path="battle" element={<CombatView />} />
-                            <Route path="companions" element={<CompanionsView />} />
-                            <Route path="companions/create" element={<CompanionCreation />} />
-                            <Route path="shop" element={<ShopView />} />
-                            <Route path="train" element={<TrainingView />} />
-                            <Route path="inventory" element={<InventoryView />} />
-                            <Route path="explore" element={<ExplorationView />} />
-                            <Route path="messages" element={<Messages />} />
-                            <Route path="leaderboard" element={<LeaderboardView />} />
-                            <Route path="messages/:userId" element={<Messages />} />
-                            <Route path="profile/me" element={<MyProfile />} />
-                            <Route path="profile/:username" element={<UserProfile />} />
-                            <Route path="*" element={<Navigate to="/game/explore" replace />} />
-                        </Routes>
+                        <ErrorBoundary>
+                            <React.Suspense fallback={
+                                <div className="h-full flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                                </div>
+                            }>
+                                <Routes>
+                                    <Route path="battle-select" element={<BattleSelection />} />
+                                    <Route path="battle" element={<CombatView />} />
+                                    <Route path="companions" element={<CompanionsView />} />
+                                    <Route path="companions/create" element={<CompanionCreation />} />
+                                    <Route path="shop" element={<ShopView />} />
+                                    <Route path="train" element={<TrainingView />} />
+                                    <Route path="inventory" element={<InventoryView />} />
+                                    <Route path="explore" element={<ExplorationView />} />
+                                    <Route path="messages" element={<Messages />} />
+                                    <Route path="leaderboard" element={<LeaderboardView />} />
+                                    <Route path="messages/:userId" element={<Messages />} />
+                                    <Route path="profile/me" element={<MyProfile />} />
+                                    <Route path="profile/:username" element={<UserProfile />} />
+                                    <Route path="admin" element={<AdminView />} />
+                                    <Route path="*" element={<Navigate to="/game/explore" replace />} />
+                                </Routes>
+                            </React.Suspense>
+                        </ErrorBoundary>
                     </div>
                 </main>
             </div>

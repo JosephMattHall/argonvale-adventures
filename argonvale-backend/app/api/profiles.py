@@ -6,6 +6,8 @@ from app.models.companion import Companion
 from app.auth.security import get_current_user
 from pydantic import BaseModel
 from typing import List
+from app.schemas.user import ProfileResponse
+from app.schemas.companion import CompanionResponse
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
@@ -14,38 +16,8 @@ class ProfileUpdate(BaseModel):
     avatar_url: str | None = None
     title: str | None = None
 
-class ProfileResponse(BaseModel):
-    id: int
-    username: str
-    bio: str
-    coins: int
-    has_starter: bool
-    last_x: int
-    last_y: int
-    last_zone_id: str
-    avatar_url: str
-    title: str
-    titles_unlocked: str
-    
-    class Config:
-        from_attributes = True
 
-class CompanionResponse(BaseModel):
-    id: int
-    name: str
-    species: str
-    element: str
-    image_url: str
-    level: int
-    hp: int
-    max_hp: int
-    strength: int
-    defense: int
-    speed: int
-    is_active: bool
-    
-    class Config:
-        from_attributes = True
+
 
 @router.get("/me", response_model=ProfileResponse)
 def get_my_profile(current_user: User = Depends(get_current_user)):

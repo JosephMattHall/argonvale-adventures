@@ -7,13 +7,21 @@ class Item(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
-    item_type = Column(String, nullable=False) # weapon, potion, material
+    item_type = Column(String, nullable=False) # weapon, potion, material, food
+    description = Column(String, default="")
+    image_url = Column(String, default="default_item.png")
+    category = Column(String, default="misc") # weapons, armor, food, utility
     
     # Stores the JSON representation of app.schemas.items.WeaponStats
     # e.g. {"attack": {"fire": 10}, "reflection": {"fire": 0.5}}
     weapon_stats = Column(JSON, default={})
+    
+    # e.g. {"type": "freeze", "chance": 0.25}
+    effect = Column(JSON, default={})
+    
     price = Column(Integer, default=0)
     is_equipped = Column(Boolean, default=False)
+    is_consumable = Column(Boolean, default=False)
 
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="items")

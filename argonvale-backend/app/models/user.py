@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, Float
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -9,6 +9,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    role = Column(String, default="user") # 'admin', 'moderator', 'user'
     
     # Profile & Economy
     coins = Column(Integer, default=0)
@@ -25,6 +26,7 @@ class User(Base):
     last_x = Column(Integer, default=8)
     last_y = Column(Integer, default=8)
     last_zone_id = Column(String, default="town")
+    last_move_at = Column(Float, default=0.0) # Unix timestamp
 
     companions = relationship("Companion", back_populates="owner")
     items = relationship("Item", back_populates="owner")

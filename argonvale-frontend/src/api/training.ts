@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Companion } from './profiles';
+// unused companion import removed
 
 const API_URL = 'http://localhost:8000';
 

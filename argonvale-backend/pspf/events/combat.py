@@ -14,8 +14,8 @@ class CombatAction(GameEvent):
     actor_id: int # Player ID or 'ai'
     action_type: str # 'attack', 'use_item'
     stance: str = "normal" # normal, berserk, defensive
-    weapon_ids: List[int] = [] # Up to 2
-    item_id: Optional[int] = None
+    item_ids: List[int] = [] # Up to 2
+    item_id: Optional[int] = None # For legacy single use_item if needed
 
 class TurnProcessed(GameEvent):
     combat_id: str
@@ -25,6 +25,13 @@ class TurnProcessed(GameEvent):
     description: str
     attacker_hp: int
     defender_hp: int # In PvE, this is the monster
+    
+    # Status Indicators
+    player_frozen_until: int = 0
+    enemy_frozen_until: int = 0
+    player_stealth_until: int = 0
+    enemy_stealth_until: int = 0
+    used_item_ids: List[int] = []
 
 class CombatEnded(GameEvent):
     combat_id: str

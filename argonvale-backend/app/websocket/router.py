@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 import json
 import logging
 import random
+import time
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
@@ -28,11 +29,50 @@ logger = logging.getLogger("argonvale")
 
 # Per-User Game State Container
 class UserSession:
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, username: str):
         self.user_id = user_id
+        self.username = username
+        self.current_zone = None
         # Initialize default state
         self.companion_state = CompanionManagementState(owner_id=user_id)
+        self.last_message_at = 0.0
         # We could cache other things here
+
+class SyncManager:
+    def __init__(self):
+        # zone_id -> set of websockets
+        self.subscriptions: Dict[str, set] = {}
+
+    def subscribe(self, zone_id: str, websocket: WebSocket):
+        if zone_id not in self.subscriptions:
+            self.subscriptions[zone_id] = set()
+        self.subscriptions[zone_id].add(websocket)
+        logger.debug(f"Socket subscribed to zone: {zone_id}")
+
+    def unsubscribe(self, zone_id: str, websocket: Optional[WebSocket]):
+        if not websocket: return
+        for zone in self.subscriptions:
+            self.subscriptions[zone].discard(websocket)
+
+    async def broadcast(self, zone_id: str, event_data: dict, exclude: Optional[WebSocket] = None):
+        if zone_id not in self.subscriptions:
+            return
+        
+        # Prepare message as list of events for compatibility
+        message = json.dumps([event_data])
+        
+        dead_sockets = []
+        for ws in list(self.subscriptions[zone_id]):
+            if ws == exclude:
+                continue
+            try:
+                await ws.send_text(message)
+            except Exception as e:
+                logger.debug(f"Broadcast failed for socket, marking as dead: {e}")
+                dead_sockets.append(ws)
+        
+        for ws in dead_sockets:
+            self.unsubscribe(zone_id, ws)
 
 class GameServer:
     def __init__(self):
@@ -40,6 +80,7 @@ class GameServer:
         self.exploration = ExplorationProcessor()
         self.combat = CombatProcessor()
         self.management = CompanionManagementProcessor()
+        self.sync = SyncManager()
         self.pvp_queue: List[Dict[str, Any]] = [] # [{'user_id', 'websocket', 'companion_id', 'username'}]
         
         # We use a global state container just for the processors signature, 
@@ -69,7 +110,8 @@ class GameServer:
                 return False
             
             # 2. Load State
-            session = UserSession(user_id=user.id)
+            session = UserSession(user_id=user.id, username=username)
+            session.current_zone = user.last_zone_id
             
             # Load Companion State
             companions = db.query(Companion).filter(Companion.owner_id == user.id).all()
@@ -78,6 +120,9 @@ class GameServer:
             session.companion_state.has_starter = len(companions) > 0 # Simple check for now
             
             self.active_connections[websocket] = session
+            # Subscribe to current zone
+            self.sync.subscribe(session.current_zone, websocket)
+            
             logger.info(f"User {username} (ID: {user.id}) connected.")
             
             return True
@@ -90,8 +135,17 @@ class GameServer:
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
-            user_id = self.active_connections[websocket].user_id
-            # Remove from queue if they disconnect
+            session = self.active_connections[websocket]
+            
+            # Broadcast Disconnection before removing
+            import asyncio
+            asyncio.create_task(self.sync.broadcast(session.current_zone, {
+                "type": "PlayerDisconnected",
+                "player_id": session.user_id
+            }))
+            
+            # Unsubscribe and remove
+            self.sync.unsubscribe(session.current_zone, websocket)
             self.pvp_queue = [q for q in self.pvp_queue if q['websocket'] != websocket]
             del self.active_connections[websocket]
 
@@ -101,6 +155,13 @@ class GameServer:
 
         user_session = self.active_connections[websocket]
         user_id = user_session.user_id
+
+        # 0. Global Rate Limiting
+        now = time.time()
+        if now - user_session.last_message_at < 0.02: # 50 msgs/sec max
+            # logger.warning(f"Rate limit exceeded for user {user_id}")
+            return
+        user_session.last_message_at = now
 
         # 1. Initialize Processing Context
         output_events = []
@@ -126,24 +187,81 @@ class GameServer:
                 try:
                     user = db_persist.query(User).filter(User.id == user_id).first()
                     if user:
-                        # Simple boundary check logic (matching frontend gridSize)
-                        # gridSize is 40 for town, 120 for wild.
-                        limit = 40 if zone_id == "town" else 120
+                        # 1. Validation Logic
+                        now = time.time()
                         
-                        new_x = max(0, min(limit - 1, user.last_x + dx))
-                        new_y = max(0, min(limit - 1, user.last_y + dy))
+                        # A. Speed Check (Anti-Macro/Hack)
+                        # Client sends moves at 100ms interval usually, let's allow 80ms for network jitter
+                        if now - (user.last_move_at or 0) < 0.08:
+                            logger.warning(f"Speed check failed for user {user_id}")
+                            return
+
+                        # B. Distance Check (Anti-Teleport)
+                        if abs(dx) + abs(dy) > 1:
+                            logger.warning(f"Distance check failed for user {user_id}: dx={dx}, dy={dy}")
+                            return
+
+                        # C. Collision Check (Using ExplorationProcessor)
+                        new_x = user.last_x + dx
+                        new_y = user.last_y + dy
                         
+                        if not self.exploration.is_valid_move(zone_id, new_x, new_y):
+                            logger.warning(f"Collision check failed for user {user_id} at {new_x},{new_y} in {zone_id}")
+                            # Send sync fix back to client
+                            await websocket.send_text(json.dumps({
+                                "type": "TeleportPlayer",
+                                "x": user.last_x,
+                                "y": user.last_y,
+                                "zone_id": user.last_zone_id
+                            }))
+                            return
+
+                        # 2. Update State
                         user.last_x = new_x
                         user.last_y = new_y
+                        
+                        # Handle Zone Change Subscriptions
+                        if zone_id != user_session.current_zone:
+                            self.sync.unsubscribe(user_session.current_zone, websocket)
+                            self.sync.subscribe(zone_id, websocket)
+                            user_session.current_zone = zone_id
+
                         user.last_zone_id = zone_id
+                        user.last_move_at = now
+                        
+                        # Hunger System: Deplete 1 hunger per move for active companions
+                        for comp in user.companions:
+                            if comp.is_active and comp.status == "active":
+                                if comp.hunger > 0:
+                                    comp.hunger -= 1
+                                else:
+                                    # Starvation: Lose 2 health if hunger is 0
+                                    comp.hp = max(0, comp.hp - 2)
+                                    if comp.hp == 0:
+                                        # Optional: Handle companion knockout? 
+                                        pass
+                        
                         db_persist.commit()
                         
-                        input_events.append(PlayerMoved.create(
+                        # 3. Create Event
+                        move_evt = PlayerMoved.create(
                             player_id=user_id,
                             zone_id=zone_id, 
                             x=new_x, 
                             y=new_y
-                        ))
+                        )
+                        input_events.append(move_evt)
+
+                        # 4. Broadcast to others in the zone
+                        await self.sync.broadcast(zone_id, {
+                            "type": "PlayerMoved",
+                            "player_id": user_id,
+                            "username": user_session.username,
+                            "zone_id": zone_id,
+                            "x": new_x,
+                            "y": new_y
+                        }, exclude=websocket)
+
                 finally:
                     db_persist.close()
 
@@ -253,7 +371,13 @@ class GameServer:
                         # Get Inventory
                         from app.models.item import Item as DBItem
                         equipped_items_db = db.query(DBItem).filter(DBItem.owner_id == user_id, DBItem.is_equipped == True).all()
-                        equipped_items = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats} for i in equipped_items_db]
+                        equipped_items = [{
+                            "id": i.id, 
+                            "name": i.name, 
+                            "item_type": i.item_type, 
+                            "stats": i.weapon_stats,
+                            "effect": i.effect
+                        } for i in equipped_items_db]
 
                         encounter_context = payload.get("context", {})
                         

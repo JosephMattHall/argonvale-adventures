@@ -25,6 +25,11 @@ class Companion(Base):
     status = Column(String, default="active")  # active, boarding, training, expedition
     busy_until = Column(DateTime, nullable=True) # For timer-based tasks
     is_active = Column(Boolean, default=True)  # In active party (max 4)
+    
+    # Hunger System
+    hunger = Column(Integer, default=100) # 0-100
+    last_fed_at = Column(DateTime, default=datetime.utcnow)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner_id = Column(Integer, ForeignKey("users.id"))

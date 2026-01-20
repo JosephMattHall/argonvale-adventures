@@ -1,5 +1,5 @@
 export const soundManager = {
-    play: (type: 'attack' | 'hit' | 'block' | 'levelUp' | 'buy') => {
+    play: (type: 'attack' | 'hit' | 'block' | 'levelUp' | 'buy' | 'freeze' | 'stealth') => {
         // Generic Web Audio API sounds so we don't need external assets
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const oscillator = audioCtx.createOscillator();
@@ -54,6 +54,24 @@ export const soundManager = {
                 gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
                 oscillator.start(now);
                 oscillator.stop(now + 0.3);
+                break;
+            case 'freeze':
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(800, now);
+                oscillator.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                oscillator.start(now);
+                oscillator.stop(now + 0.4);
+                break;
+            case 'stealth':
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(200, now);
+                oscillator.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                oscillator.start(now);
+                oscillator.stop(now + 0.5);
                 break;
         }
     }

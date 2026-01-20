@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Shield, Sword, Zap, Flame } from 'lucide-react';
+import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles } from 'lucide-react';
 import { useGameSocket } from '../../hooks/useGameSocket';
 import type { Item } from '../../api/equipment';
 import { soundManager } from '../../utils/SoundManager';
@@ -60,13 +60,21 @@ const CombatView: React.FC = () => {
     const [logs, setLogs] = useState<string[]>(["Battle Started!"]);
     const [isBattleOver, setIsBattleOver] = useState(false);
     const [result, setResult] = useState<"win" | "loss" | null>(null);
+    const [loot, setLoot] = useState<{ coins?: number, item?: any } | null>(null);
+
+    // Status Effects
+    const [turn, setTurn] = useState(1);
+    const [playerFrozenUntil, setPlayerFrozenUntil] = useState(0);
+    const [enemyFrozenUntil, setEnemyFrozenUntil] = useState(0);
+    const [playerStealthUntil, setPlayerStealthUntil] = useState(0);
+    const [enemyStealthUntil, setEnemyStealthUntil] = useState(0);
 
     // Turn Selection State
     const [currentStance, setCurrentStance] = useState<'normal' | 'berserk' | 'defensive'>('normal');
-    const [selectedWeapons, setSelectedWeapons] = useState<number[]>([]);
+    const [selectedItems, setSelectedItems] = useState<number[]>([]);
     const [equippedItems] = useState<Item[]>(context.equipped_items);
-    const [activeTab, setActiveTab] = useState<'weapons' | 'items'>('weapons');
     const [xpGained, setXpGained] = useState(0);
+    const [usedItemIds, setUsedItemIds] = useState<number[]>([]);
     const [floatingDamage, setFloatingDamage] = useState<FloatingDamage[]>([]);
     const [playerAnimating, setPlayerAnimating] = useState<string | null>(null);
     const [enemyAnimating, setEnemyAnimating] = useState<string | null>(null);
@@ -74,25 +82,32 @@ const CombatView: React.FC = () => {
     useEffect(() => {
         const combatEvents = messages.filter((m: any) =>
             (m.type === 'TurnProcessed' || m.type === 'CombatEnded') &&
-            m.combat_id === combatId
+            (m.combat_id === combatId || m.combatId === combatId)
         );
 
         if (combatEvents.length > 0) {
             const newLogs = ["Battle Started!"];
-            let lasthp = context.player_hp;
-            let lastEnemyHp = context.enemy_hp;
+            let lasthp = playerHp;
+            let lastEnemyHp = enemyHp;
             let over = false;
             let res: "win" | "loss" | null = null;
             let xp = 0;
+            let lootData = loot;
 
             combatEvents.forEach((msg: any) => {
                 if (msg.type === 'TurnProcessed') {
                     newLogs.push(msg.description);
+                    setTurn(msg.turn_number);
+                    setPlayerFrozenUntil(msg.player_frozen_until || 0);
+                    setEnemyFrozenUntil(msg.enemy_frozen_until || 0);
+                    setPlayerStealthUntil(msg.player_stealth_until || 0);
+                    setEnemyStealthUntil(msg.enemy_stealth_until || 0);
+                    if (msg.used_item_ids) setUsedItemIds(msg.used_item_ids);
 
                     // Logic For Visual Feedback
                     if (msg.damage_dealt > 0) {
-                        const isEnemyHit = msg.actor_id !== 0; // If actor is user (not 0), enemy is hit
-                        if (isEnemyHit) {
+                        const isPlayerAction = msg.actor_id !== 0;
+                        if (isPlayerAction) {
                             setEnemyAnimating('animate-shake animate-flash-red');
                             setTimeout(() => setEnemyAnimating(null), 500);
                             soundManager.play('hit');
@@ -103,33 +118,10 @@ const CombatView: React.FC = () => {
                             soundManager.play('hit');
                             addFloatingDamage(msg.damage_dealt, 'player', msg.description.includes('CRITICAL'));
                         }
-                    } else if (msg.description.includes('block') || msg.description.includes('defensive')) {
-                        const isEnemyBlock = msg.actor_id !== 0; // If actor is user, enemy blocks (or user blocks?)
-                        // Wait, if actor_id is user (1), the enemy is the one being attacked. 
-                        // If it's a block, the defender is blocking.
-                        if (isEnemyBlock) {
-                            setEnemyAnimating('animate-block-shake');
-                            setTimeout(() => setEnemyAnimating(null), 500);
-                        } else {
-                            setPlayerAnimating('animate-block-shake');
-                            setTimeout(() => setPlayerAnimating(null), 500);
-                        }
-                        soundManager.play('block');
-                    } else if (msg.description.includes('restore') || msg.description.includes('heal')) {
-                        const isEnemyHeal = msg.actor_id === 0;
-                        if (isEnemyHeal) {
-                            setEnemyAnimating('animate-heal-pulse');
-                            setTimeout(() => setEnemyAnimating(null), 800);
-                        } else {
-                            setPlayerAnimating('animate-heal-pulse');
-                            setTimeout(() => setPlayerAnimating(null), 800);
-                        }
-                    }
-
-                    // Trigger lunges for actors
-                    if (msg.actor_id === 0 && (msg.damage_dealt > 0 || msg.description.includes('attack'))) {
-                        setEnemyAnimating(prev => prev ? `${prev} animate-lunge-left` : 'animate-lunge-left');
-                        setTimeout(() => setEnemyAnimating(null), 400);
+                    } else if (msg.description.includes('frozen')) {
+                        soundManager.play('freeze');
+                    } else if (msg.description.includes('invisible')) {
+                        soundManager.play('stealth');
                     }
 
                     lasthp = msg.attacker_hp;
@@ -139,6 +131,7 @@ const CombatView: React.FC = () => {
                     over = true;
                     res = (msg.winner_id !== 0) ? 'win' : 'loss';
                     xp = msg.xp_gained || 0;
+                    lootData = { coins: msg.loot?.coins, item: msg.dropped_item };
                     if (res === 'win') soundManager.play('levelUp');
                 }
             });
@@ -147,15 +140,16 @@ const CombatView: React.FC = () => {
             setPlayerHp(lasthp);
             setEnemyHp(lastEnemyHp);
             setXpGained(xp);
+            setLoot(lootData);
             if (over) {
                 setIsBattleOver(true);
                 setResult(res);
             }
         }
-    }, [messages, context.enemy_hp, context.player_hp]);
+    }, [messages, combatId]);
 
     const handleAttack = () => {
-        if (isBattleOver) return;
+        if (isBattleOver || turn <= playerFrozenUntil) return;
 
         sendCommand({
             type: "CombatAction",
@@ -163,15 +157,17 @@ const CombatView: React.FC = () => {
             actor_id: 1,
             action_type: "attack",
             stance: currentStance,
-            weapon_ids: selectedWeapons
+            item_ids: selectedItems
         });
+
         setPlayerAnimating('animate-lunge-right');
         setTimeout(() => setPlayerAnimating(null), 400);
         soundManager.play('attack');
+        setSelectedItems([]); // Reset selection
     };
 
     const addFloatingDamage = (val: number, type: 'player' | 'enemy', isCrit: boolean) => {
-        const id = Date.now();
+        const id = Date.now() + Math.random();
         const dmg: FloatingDamage = {
             id,
             value: isCrit ? `CRIT ${val}` : val,
@@ -185,29 +181,18 @@ const CombatView: React.FC = () => {
         }, 1000);
     };
 
-    const handleUseItem = (itemId: number) => {
-        if (isBattleOver) return;
-
-        sendCommand({
-            type: "CombatAction",
-            combat_id: combatId,
-            actor_id: 1,
-            action_type: "use_item",
-            item_id: itemId
-        });
-        setPlayerAnimating('animate-heal-pulse');
-        setTimeout(() => setPlayerAnimating(null), 800);
-    };
-
-    const toggleWeapon = (id: number) => {
-        if (selectedWeapons.includes(id)) {
-            setSelectedWeapons(selectedWeapons.filter(wid => wid !== id));
-        } else if (selectedWeapons.length < 2) {
-            setSelectedWeapons([...selectedWeapons, id]);
+    const toggleItem = (id: number) => {
+        if (selectedItems.includes(id)) {
+            setSelectedItems(selectedItems.filter(wid => wid !== id));
+        } else if (selectedItems.length < 2) {
+            setSelectedItems([...selectedItems, id]);
         }
     };
 
-
+    const isPlayerFrozen = turn <= playerFrozenUntil;
+    const isEnemyFrozen = turn <= enemyFrozenUntil;
+    const isPlayerStealthed = turn <= playerStealthUntil;
+    const isEnemyStealthed = turn <= enemyStealthUntil;
 
     return (
         <div className="flex flex-col h-full gap-4 max-w-7xl mx-auto w-full overflow-y-auto pr-1 custom-scrollbar pb-24 lg:pb-0">
@@ -215,85 +200,65 @@ const CombatView: React.FC = () => {
             <div className="flex-none lg:flex-1 glass-panel relative p-3 sm:p-4 lg:p-8 flex flex-col md:flex-row justify-between items-center overflow-hidden min-h-[400px] md:min-h-[300px] gap-6 md:gap-0">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
 
-                {/* Player Side */}
-                <div className={`text-center z-10 transition-all duration-300 w-full md:w-auto ${playerAnimating}`}>
+                <div className={`text-center z-10 transition-all duration-500 w-full md:w-auto ${playerAnimating} ${isPlayerStealthed ? 'opacity-40 brightness-150' : 'opacity-100'}`}>
                     <div className="relative group">
-                        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-primary/20 rounded-2xl mb-4 mx-auto border-2 border-primary flex items-center justify-center shadow-glow overflow-hidden relative">
-                            {/* Inner Glow/Aura */}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-transparent to-primary/20 animate-pulse" />
-                            {context.companion_image ? (
-                                <img src={`/companions/${context.companion_image}`} alt="" className="w-full h-full object-cover z-10" />
-                            ) : (
-                                <span className="text-4xl sm:text-6xl z-10 transition-transform group-hover:scale-110 duration-500">🐾</span>
+                        <div className={`w-24 h-24 sm:w-32 sm:h-32 rounded-2xl mb-4 mx-auto border-2 flex items-center justify-center shadow-glow overflow-hidden relative ${isPlayerFrozen ? 'border-cyan-400 bg-cyan-950/40' : 'border-primary bg-primary/20'}`}>
+                            {isPlayerFrozen && (
+                                <div className="absolute inset-0 bg-cyan-400/20 backdrop-blur-[1px] animate-pulse z-30 flex items-center justify-center">
+                                    <Snowflake className="text-cyan-200 animate-spin-slow" size={48} />
+                                </div>
                             )}
-                            {/* Elemental Overlay based on name or type if available */}
-                            <div className="absolute bottom-1 right-1 bg-dark/80 rounded-full p-1 border border-primary/30 z-20">
-                                <Zap size={10} className="text-gold" />
+                            {context.companion_image ? (
+                                <img src={`/companions/${context.companion_image}`} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-4xl sm:text-6xl">🐾</span>
+                            )}
+                            <div className="absolute -top-2 -right-2 flex flex-col gap-1 z-40">
+                                {isPlayerStealthed && <div className="bg-purple-600 p-1.5 rounded-full border border-purple-400"><EyeOff size={14} className="text-white" /></div>}
                             </div>
                         </div>
                     </div>
-                    <div className="font-medieval mb-2 text-primary text-xl sm:text-2xl tracking-wide uppercase">
-                        {context.companion_name}
+                    <div className="font-medieval mb-2 text-primary text-xl tracking-wide uppercase">{context.companion_name}</div>
+                    <div className="w-full sm:w-48 h-4 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
+                        <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-700" style={{ width: `${(playerHp / playerMaxHp) * 100}%` }} />
                     </div>
-                    <div className="w-full sm:w-48 h-4 sm:h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
-                        <div
-                            className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-700 ease-out rounded-full"
-                            style={{ width: `${(playerHp / playerMaxHp) * 100}%` }}
-                        />
-                    </div>
-                    <div className="text-[10px] sm:text-sm mt-2 font-mono text-white font-bold">{playerHp} / {playerMaxHp} HP</div>
+                    <div className="text-[10px] sm:text-xs mt-2 font-mono text-white font-bold">{playerHp} / {playerMaxHp} HP</div>
                 </div>
 
-                {/* VS Center & Floating Damage Overlay */}
                 <div className="absolute inset-0 pointer-events-none z-50">
                     {floatingDamage.map(dmg => (
-                        <div
-                            key={dmg.id}
-                            className={`absolute animate-float-up font-bold text-3xl drop-shadow-md select-none ${dmg.type === 'enemy' ? 'text-red-500' :
-                                dmg.type === 'crit' ? 'text-gold text-5xl italic scale-125' : 'text-neutral-200'
-                                }`}
-                            style={{ left: `${dmg.x}%`, top: `${dmg.y}%` }}
-                        >
-                            {dmg.value}
-                        </div>
+                        <div key={dmg.id} className={`absolute animate-float-up font-bold text-3xl ${dmg.type === 'enemy' ? 'text-red-500' : dmg.type === 'crit' ? 'text-gold italic scale-125' : 'text-neutral-200'}`} style={{ left: `${dmg.x}%`, top: `${dmg.y}%` }}>{dmg.value}</div>
                     ))}
                 </div>
 
-                <div className="flex flex-col items-center gap-2 lg:gap-4 order-first md:order-none mb-6 md:mb-0">
-                    <div className="text-2xl md:text-4xl font-black italic tracking-tighter text-white/5 uppercase select-none">Argonvale Fight</div>
-                    <div className="text-4xl md:text-6xl font-medieval text-gold animate-bounce drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">VS</div>
-                    <div className="text-[10px] md:text-xs font-bold text-gray-500 tracking-[0.3em] uppercase">Turn {logs.length}</div>
+                <div className="flex flex-col items-center gap-2">
+                    <div className="text-4xl md:text-6xl font-medieval text-gold animate-pulse">VS</div>
+                    <div className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">Turn {turn}</div>
                 </div>
 
-                {/* Enemy Side */}
-                <div className={`text-center z-10 transition-all duration-300 w-full md:w-auto ${enemyAnimating}`}>
+                <div className={`text-center z-10 transition-all duration-500 w-full md:w-auto ${enemyAnimating} ${isEnemyStealthed ? 'opacity-40 brightness-150' : 'opacity-100'}`}>
                     <div className="relative group">
-                        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-red-500/20 rounded-2xl mb-4 mx-auto border-2 border-red-500/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.2)] overflow-hidden relative">
-                            {/* Inner Glow/Aura */}
-                            <div className="absolute inset-0 bg-gradient-to-bl from-red-500/20 via-transparent to-red-500/20 animate-pulse" />
-                            {context.enemy_image ? (
-                                <img src={context.enemy_image.startsWith('/') ? context.enemy_image : `/companions/${context.enemy_image}`} alt="" className="w-full h-full object-cover z-10" />
-                            ) : (
-                                <span className="text-4xl sm:text-6xl z-10 transition-transform group-hover:scale-110 duration-500">
-                                    {context.enemy_type === 'Fire' ? '🔥' :
-                                        context.enemy_type === 'Water' ? '💧' :
-                                            context.enemy_type === 'Earth' ? '🗿' : '👹'}
-                                </span>
+                        <div className={`w-24 h-24 sm:w-32 sm:h-32 rounded-2xl mb-4 mx-auto border-2 flex items-center justify-center overflow-hidden relative ${isEnemyFrozen ? 'border-cyan-400 bg-cyan-950/40' : 'border-red-500/50 bg-red-500/20'}`}>
+                            {isEnemyFrozen && (
+                                <div className="absolute inset-0 bg-cyan-400/20 backdrop-blur-[1px] animate-pulse z-30 flex items-center justify-center">
+                                    <Snowflake className="text-cyan-200 animate-spin-slow" size={48} />
+                                </div>
                             )}
-                            {/* Elemental Overlay */}
-                            <div className="absolute top-1 left-1 bg-dark/80 rounded-full p-1 border border-red-500/30 z-20">
-                                <Flame size={10} className="text-red-400" />
+                            {context.enemy_image ? (
+                                <img src={context.enemy_image.startsWith('/') ? context.enemy_image : `/companions/${context.enemy_image}`} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-4xl sm:text-6xl text-red-500">👹</span>
+                            )}
+                            <div className="absolute -top-2 -left-2 flex flex-col gap-1 z-40">
+                                {isEnemyStealthed && <div className="bg-purple-600 p-1.5 rounded-full border border-purple-400"><EyeOff size={14} className="text-white" /></div>}
                             </div>
                         </div>
                     </div>
-                    <div className="font-medieval mb-2 text-red-500 text-xl sm:text-2xl tracking-wide uppercase">{context.enemy_name}</div>
-                    <div className="w-full sm:w-48 h-4 sm:h-5 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
-                        <div
-                            className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-700 ease-out rounded-full"
-                            style={{ width: `${(enemyHp / context.enemy_max_hp) * 100}%` }}
-                        />
+                    <div className="font-medieval mb-2 text-red-500 text-xl tracking-wide uppercase">{context.enemy_name}</div>
+                    <div className="w-full sm:w-48 h-4 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
+                        <div className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-700" style={{ width: `${(enemyHp / context.enemy_max_hp) * 100}%` }} />
                     </div>
-                    <div className="text-[10px] sm:text-sm mt-2 font-mono text-red-400 font-bold">{enemyHp} / {context.enemy_max_hp} HP</div>
+                    <div className="text-[10px] sm:text-xs mt-2 font-mono text-red-400 font-bold">{enemyHp} / {context.enemy_max_hp} HP</div>
                 </div>
             </div>
 
@@ -301,171 +266,98 @@ const CombatView: React.FC = () => {
             <div className="flex-none flex flex-col lg:flex-row gap-4 lg:h-72">
                 {!isBattleOver ? (
                     <>
-                        {/* 1. Stance Selection */}
-                        <div className="glass-panel w-full lg:w-48 p-4 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
-                            <div className="text-[10px] font-bold text-gray-500 tracking-widest uppercase mb-1">Combat Stance</div>
-                            <button
-                                onClick={() => setCurrentStance('normal')}
-                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'normal' ? 'border-gold bg-gold/10' : 'border-white/5 hover:bg-white/5'}`}
-                            >
-                                <Zap size={18} className={currentStance === 'normal' ? 'text-gold' : 'text-gray-400'} />
-                                <span className="text-xs mt-1 font-bold">Normal</span>
-                            </button>
-                            <button
-                                onClick={() => setCurrentStance('berserk')}
-                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'berserk' ? 'border-red-500 bg-red-500/10' : 'border-white/5 hover:bg-white/5'}`}
-                            >
-                                <Flame size={18} className={currentStance === 'berserk' ? 'text-red-500' : 'text-gray-400'} />
-                                <span className="text-xs mt-1 font-bold">Berserk</span>
-                            </button>
-                            <button
-                                onClick={() => setCurrentStance('defensive')}
-                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${currentStance === 'defensive' ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 hover:bg-white/5'}`}
-                            >
-                                <Shield size={18} className={currentStance === 'defensive' ? 'text-blue-500' : 'text-gray-400'} />
-                                <span className="text-xs mt-1 font-bold">Defend</span>
-                            </button>
+                        <div className="glass-panel w-full lg:w-48 p-4 flex flex-row lg:flex-col gap-2">
+                            <div className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1">Stance</div>
+                            {(['normal', 'berserk', 'defensive'] as const).map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setCurrentStance(s)}
+                                    disabled={isPlayerFrozen}
+                                    className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all p-2 ${currentStance === s ? 'border-primary bg-primary/20' : 'border-white/5 hover:bg-white/5'}`}
+                                >
+                                    {s === 'normal' ? <Zap size={16} /> : s === 'berserk' ? <Flame size={16} /> : <Shield size={16} />}
+                                    <span className="text-[10px] font-bold mt-1 capitalize">{s}</span>
+                                </button>
+                            ))}
                         </div>
 
-                        {/* 2. Equipped Gear & Attack / Items */}
-                        <div className="glass-panel flex-1 p-4 flex flex-col">
-                            <div className="flex justify-between items-center mb-4">
-                                <div className="flex gap-4">
-                                    <button
-                                        onClick={() => setActiveTab('weapons')}
-                                        className={`text-[10px] font-bold tracking-widest uppercase pb-1 border-b-2 transition-all ${activeTab === 'weapons' ? 'border-primary text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-                                    >
-                                        Weapons
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('items')}
-                                        className={`text-[10px] font-bold tracking-widest uppercase pb-1 border-b-2 transition-all ${activeTab === 'items' ? 'border-primary text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-                                    >
-                                        Items
-                                    </button>
-                                </div>
-                                <div className="text-[10px] font-mono text-gold">
-                                    {activeTab === 'weapons' ? `${selectedWeapons.length}/2 Picked` : 'Consumables'}
-                                </div>
+                        <div className={`glass-panel flex-1 p-4 flex flex-col relative ${isPlayerFrozen ? 'opacity-50 grayscale' : ''}`}>
+                            <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                                <div className="text-[10px] font-bold tracking-widest uppercase text-white/60">Choose 2 Actions</div>
+                                <div className="text-[10px] font-mono text-gold px-2 py-0.5 rounded bg-black/40 border border-gold/20">{selectedItems.length}/2</div>
                             </div>
 
-                            <div className="flex-1 flex gap-2 items-center">
+                            <div className="flex-1 flex gap-3 items-center">
                                 <div className="flex-1 grid grid-cols-4 lg:grid-cols-8 gap-2">
-                                    {activeTab === 'weapons' ? (
-                                        <>
-                                            {equippedItems.filter(i => i.item_type !== 'potion').map(item => (
-                                                <div
-                                                    key={item.id}
-                                                    onClick={() => toggleWeapon(item.id)}
-                                                    className={`
-                                                        aspect-square rounded-lg border flex flex-col items-center justify-center cursor-pointer transition-all p-1
-                                                        ${selectedWeapons.includes(item.id) ? 'border-primary bg-primary/20 scale-105 shadow-glow z-10' : 'border-white/5 bg-black/20 hover:bg-white/5'}
-                                                    `}
-                                                >
-                                                    <Sword size={20} className={selectedWeapons.includes(item.id) ? 'text-primary' : 'opacity-50'} />
-                                                    <div className="text-[7px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
-                                                    <div className="flex gap-1 mt-1">
-                                                        {(Object.entries(item.stats?.atk || {}) as [string, number][]).map(([type, val]) => (
-                                                            <span key={type} className="text-[6px] px-1 bg-primary/20 rounded text-primary font-bold">
-                                                                {val} {type[0].toUpperCase()}
-                                                            </span>
-                                                        ))}
-                                                        {(Object.entries(item.stats?.def || {}) as [string, number][]).map(([type, val]) => (
-                                                            <span key={type} className="text-[6px] px-1 bg-blue-500/20 rounded text-blue-400 font-bold">
-                                                                {val} D
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {[...Array(Math.max(0, 8 - equippedItems.filter(i => i.item_type !== 'potion').length))].map((_, i) => (
-                                                <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10">
-                                                    <div className="w-2 h-2 rounded-full bg-white/5" />
-                                                </div>
-                                            ))}
-                                        </>
-                                    ) : (
-                                        <>
-                                            {equippedItems.filter(i => i.item_type === 'potion').map(item => (
-                                                <div
-                                                    key={item.id}
-                                                    onClick={() => handleUseItem(item.id)}
-                                                    className="aspect-square rounded-lg border border-white/5 bg-black/20 hover:bg-primary/20 hover:border-primary cursor-pointer transition-all flex flex-col items-center justify-center group"
-                                                >
-                                                    <Zap size={24} className="text-emerald-400 group-hover:scale-110 transition-transform" />
-                                                    <div className="text-[8px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
-                                                </div>
-                                            ))}
-                                            {[...Array(Math.max(0, 8 - equippedItems.filter(i => i.item_type === 'potion').length))].map((_, i) => (
-                                                <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10">
-                                                    <div className="w-2 h-2 rounded-full bg-white/5" />
-                                                </div>
-                                            ))}
-                                        </>
-                                    )}
-                                </div>
+                                    {equippedItems.map(item => {
+                                        const isSelected = selectedItems.includes(item.id);
+                                        const isSpent = usedItemIds.includes(item.id);
+                                        const isWeapon = item.item_type === 'weapon';
+                                        const isShield = item.item_type === 'shield';
 
-                                {activeTab === 'weapons' && (
-                                    <button
-                                        onClick={handleAttack}
-                                        disabled={selectedWeapons.length === 0}
-                                        className="h-full aspect-square btn-primary rounded-xl flex flex-col items-center justify-center gap-2 hover:scale-105 transition-transform disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
-                                    >
-                                        <Sword size={32} className="group-hover:rotate-12 transition-transform" />
-                                        <span className="font-medieval font-bold text-lg tracking-widest">STRIKE</span>
-                                    </button>
-                                )}
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => !isPlayerFrozen && !isSpent && toggleItem(item.id)}
+                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center transition-all p-1 relative ${isSpent ? 'opacity-20 grayscale border-white/5 cursor-not-allowed' : isSelected ? 'border-primary bg-primary/20 scale-105 z-10 cursor-pointer' : 'border-white/5 bg-black/20 hover:bg-white/5 cursor-pointer'}`}
+                                            >
+                                                {isShield ? <Shield size={18} /> : isWeapon ? <Sword size={18} /> : <Sparkles size={18} className="text-emerald-400" />}
+                                                <div className="text-[7px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
+                                                {!isSpent && item.effect?.type && (
+                                                    <div className="absolute top-1 right-1">
+                                                        {item.effect.type === 'freeze' ? <Snowflake size={8} className="text-cyan-400" /> : <EyeOff size={8} className="text-purple-400" />}
+                                                    </div>
+                                                )}
+                                                {isSpent && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="w-full h-[1px] bg-red-500/50 rotate-45" /></div>}
+                                            </div>
+                                        );
+                                    })}
+                                    {[...Array(Math.max(0, 8 - equippedItems.length))].map((_, i) => (
+                                        <div key={i} className="aspect-square rounded-lg border border-dashed border-white/5 flex items-center justify-center bg-black/10"><div className="w-1.5 h-1.5 rounded-full bg-white/5" /></div>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={handleAttack}
+                                    disabled={selectedItems.length === 0 || isPlayerFrozen}
+                                    className="h-full px-6 btn-primary rounded-xl flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all disabled:opacity-50 min-w-[100px]"
+                                >
+                                    <Sword size={24} />
+                                    <span className="font-medieval font-bold text-xs tracking-widest uppercase">Strike</span>
+                                </button>
                             </div>
                         </div>
                     </>
                 ) : (
                     <div className="glass-panel flex-1 p-6 flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500 bg-primary/5 border-primary/30">
-                        <div className="flex items-center gap-6">
-                            <div className="text-6xl shadow-glow p-4 rounded-full bg-primary/10">
-                                {result === 'win' ? '🏆' : '💀'}
+                        <div className="flex flex-col lg:flex-row items-center gap-8 w-full">
+                            <div className="flex items-center gap-6 text-left">
+                                <div className="text-6xl">{result === 'win' ? '🏆' : '💀'}</div>
+                                <div>
+                                    <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : 'text-red-500'}`}>{result === 'win' ? 'VICTORY!' : 'DEFEAT'}</h2>
+                                    {result === 'win' && <div className="text-gold font-bold">+{xpGained} XP</div>}
+                                </div>
                             </div>
-                            <div className="text-left">
-                                <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : 'text-red-500'}`}>
-                                    {result === 'win' ? 'VICTORY!' : 'DEFEAT'}
-                                </h2>
-                                {result === 'win' && (
-                                    <div className="text-gold font-bold animate-pulse text-lg">
-                                        +{xpGained} XP GAINED
+                            <div className="flex-1">
+                                {result === 'win' && loot && (
+                                    <div className="glass-panel p-3 bg-black/40 border-gold/20 flex flex-wrap gap-4 items-center">
+                                        <div className="text-[10px] uppercase font-bold text-gray-500 w-full mb-1">Loot Found</div>
+                                        {loot.coins && <div className="flex items-center gap-2"><Coins size={14} className="text-gold" /><span className="text-gold font-bold text-sm">{loot.coins}</span></div>}
+                                        {loot.item && <div className="flex items-center gap-2"><Sparkles size={14} className="text-primary" /><span className="text-white text-sm">{loot.item.name}</span></div>}
                                     </div>
                                 )}
                             </div>
-                            <button
-                                onClick={() => {
-                                    const origin = location.state?.origin;
-                                    if (origin === 'exploration') {
-                                        navigate('/game/explore');
-                                    } else {
-                                        navigate('/game/battle-select');
-                                    }
-                                }}
-                                className="btn-primary px-8 py-3 text-lg hover:scale-105 transition-transform ml-4"
-                            >
-                                {location.state?.origin === 'exploration' ? 'Continue Journey' : 'Return to Arena'}
-                            </button>
+                            <button onClick={() => navigate(location.state?.origin === 'exploration' ? '/game/explore' : '/game/battle-select')} className="btn-primary px-8 py-3 text-lg">{location.state?.origin === 'exploration' ? 'Continue' : 'Return'}</button>
                         </div>
-                        <p className="text-sm text-gray-400 mt-4 max-w-lg text-center italic">
-                            {result === 'win'
-                                ? 'Your companion proved its worth and gathered spoils! The journey continues.'
-                                : 'Your companion was overpowered. Regroup at the nearest haven and try again.'}
-                        </p>
                     </div>
                 )}
 
-                {/* 3. Combat Log */}
                 <div className="glass-panel w-full lg:w-80 p-4 overflow-y-auto font-mono text-[10px] flex flex-col-reverse custom-scrollbar h-48 lg:h-auto">
                     <div className="flex flex-col-reverse">
-                        {logs.map((log, i) => (
-                            <div key={i} className={`mb-2 pb-2 border-b border-white/5 last:border-0 ${log.includes('deal') ? 'text-primary' : log.includes('back') ? 'text-red-400' : 'text-gray-400'}`}>
-                                {log}
-                            </div>
+                        {logs.map((l, i) => (
+                            <div key={i} className="mb-2 pb-2 border-b border-white/5 last:border-0 text-gray-400">{l}</div>
                         ))}
                     </div>
-                    <div className="text-[var(--text-secondary)] text-[8px] font-bold uppercase mb-4 sticky top-0 bg-[#111114] pb-2 border-b border-white/10 z-10">Scroll of Battle</div>
+                    <div className="text-[8px] font-bold uppercase text-gray-500 mb-4 sticky top-0 bg-[#0a0a0c] pb-2 border-b border-white/10 z-10">Combat Log</div>
                 </div>
             </div>
         </div>

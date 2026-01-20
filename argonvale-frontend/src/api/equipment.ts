@@ -5,8 +5,11 @@ export interface Item {
     id: number;
     name: string;
     item_type: string;
+    description: string;
+    image_url: string;
+    category: string;
     weapon_stats: any;
-    stats?: any;
+    effect?: any;
     is_equipped: boolean;
 }
 
@@ -24,6 +27,10 @@ export const equipmentApi = {
     },
     async usePotion(itemId: number) {
         const response = await axios.post(`${API_URL}/api/equipment/use/${itemId}`, {}, { headers: getAuthHeaders() });
+        return response.data;
+    },
+    async feedCompanion(itemId: number, companionId: number) {
+        const response = await axios.post(`${API_URL}/api/equipment/feed/${itemId}/${companionId}`, {}, { headers: getAuthHeaders() });
         return response.data;
     },
     async seedTestItems() {

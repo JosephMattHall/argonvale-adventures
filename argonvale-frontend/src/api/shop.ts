@@ -7,7 +7,11 @@ export interface ShopItem {
     name: string;
     item_type: string;
     price: number;
+    category: string;
+    description: string;
+    image_url: string;
     stats: any;
+    effect: any;
 }
 
 export const shopApi = {

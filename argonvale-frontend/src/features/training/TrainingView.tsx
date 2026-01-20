@@ -38,7 +38,14 @@ const TrainingView: React.FC = () => {
         try {
             const companionsData = await companionsApi.getAllCompanions();
             setCompanions(companionsData);
-            if (companionsData.length > 0) setSelectedId(companionsData[0].id);
+
+            // Preserve selection if it still exists, otherwise default to first
+            if (companionsData.length > 0) {
+                setSelectedId(prev => {
+                    if (prev && companionsData.some(c => c.id === prev)) return prev;
+                    return companionsData[0].id;
+                });
+            }
         } catch (error) {
             console.error('Failed to load data:', error);
         } finally {

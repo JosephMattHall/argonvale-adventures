@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.user import User
 from app.models.item import Item
+from app.models.companion import Companion
 from app.auth.security import get_current_user
 from pydantic import BaseModel
 from typing import List
@@ -17,7 +18,11 @@ def get_inventory(current_user: User = Depends(get_current_user)):
             "id": item.id,
             "name": item.name,
             "item_type": item.item_type,
+            "description": item.description,
+            "image_url": item.image_url,
+            "category": item.category,
             "weapon_stats": item.weapon_stats,
+            "effect": item.effect,
             "is_equipped": item.is_equipped
         } for item in current_user.items
     ]
@@ -54,6 +59,34 @@ def use_item(item_id: int, db: Session = Depends(get_db), current_user = Depends
         return {"status": "healed", "new_hp": companion.hp}
     
     raise HTTPException(status_code=400, detail="No companion to heal")
+
+@router.post("/feed/{item_id}/{companion_id}")
+def feed_companion(item_id: int, companion_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    item = db.query(Item).filter(Item.id == item_id, Item.owner_id == current_user.id).first()
+    if not item or item.item_type != "food":
+        raise HTTPException(status_code=404, detail="Food item not found")
+    
+    companion = db.query(Companion).filter(Companion.id == companion_id, Companion.owner_id == current_user.id).first()
+    if not companion:
+        raise HTTPException(status_code=404, detail="Companion not found")
+    
+    effect = item.effect or {}
+    hunger_restore = effect.get("hunger", effect.get("value", 0))
+    hp_restore = effect.get("heal", 0)
+    
+    companion.hunger = min(100, companion.hunger + hunger_restore)
+    if hp_restore > 0:
+        companion.hp = min(companion.max_hp, companion.hp + hp_restore)
+    
+    db.delete(item)
+    db.commit()
+    
+    return {
+        "status": "success", 
+        "message": f"Fed {item.name} to {companion.name}!",
+        "new_hunger": companion.hunger,
+        "new_hp": companion.hp
+    }
 
 @router.post("/seed-test-items")
 def seed_items(db: Session = Depends(get_db), current_user = Depends(get_current_user)):

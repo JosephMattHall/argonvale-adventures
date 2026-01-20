@@ -28,6 +28,7 @@ const ExplorationView: React.FC = () => {
 
     // State
     const [currentZoneId, setCurrentZoneId] = useState<string>(profile?.last_zone_id || 'town');
+    const [otherPlayers, setOtherPlayers] = useState<Record<number, { x: number, y: number, username: string }>>({});
 
     // Sync zone and position state after profile loads (fixes race condition)
     useEffect(() => {
@@ -69,8 +70,6 @@ const ExplorationView: React.FC = () => {
 
         if (isSolid(nextX, nextY)) {
             console.log("Movement Blocked at:", nextX, nextY);
-            // Blocked
-            // Could add "bump" sound or animation here
             return;
         }
 
@@ -100,6 +99,9 @@ const ExplorationView: React.FC = () => {
     useEffect(() => {
         const loadMap = async () => {
             try {
+                // Clear other players when changing zones
+                setOtherPlayers({});
+
                 // Load Map JSON
                 const res = await fetch(`/maps/${currentZoneId}.json`);
                 if (!res.ok) throw new Error("Map not found");
@@ -117,38 +119,23 @@ const ExplorationView: React.FC = () => {
                 img.onerror = (e) => console.error("Tileset failed to load", e);
 
                 // --- Position Validation Logic ---
-                // Check if current player position is valid in the NEW map
                 let safeX = playerPos.x;
                 let safeY = playerPos.y;
                 let needsReset = false;
 
-                // 1. Bounds Check
                 if (safeX < 0 || safeX >= data.width || safeY < 0 || safeY >= data.height) {
-                    console.warn(`Position ${safeX},${safeY} out of bounds for ${currentZoneId} (${data.width}x${data.height}). Resetting.`);
                     needsReset = true;
-                }
-                // 2. Collision Check (if in bounds)
-                else {
+                } else {
                     const idx = safeY * data.width + safeX;
                     if (data.layers.collision[idx] === 1) {
-                        console.warn(`Position ${safeX},${safeY} is solid in ${currentZoneId}. Resetting.`);
                         needsReset = true;
                     }
                 }
 
                 if (needsReset) {
-                    // Default safe spot (center is usually safe-ish, or hardcode per zone)
-                    // Better: Find nearest safe spot or just center
                     safeX = Math.floor(data.width / 2);
                     safeY = Math.floor(data.height / 2);
-
-                    // Verify center is safe, if not, scan?
-                    // For now, assume center is safe based on generator logic (it didn't put trees on center specifically)
-                    // But to be safe, let's just force it.
-                    console.log("Resetting player to:", safeX, safeY);
-
                     setPlayerPos({ x: safeX, y: safeY });
-                    // IMPORTANT: Update profile immediately so next reload/refresh is safe
                     if (profile) {
                         updateProfile({
                             ...profile,
@@ -158,52 +145,60 @@ const ExplorationView: React.FC = () => {
                         });
                     }
                 }
-
-                console.log("Map Loaded:", data);
             } catch (err) {
                 console.error("Failed to load map:", err);
             }
         };
         loadMap();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentZoneId]); // ONLY reload map when zone changes, NOT when profile changes!
+    }, [currentZoneId]);
 
-    // Listen for Encounters
-    // Capture initial message count on mount using LAZY initialization to avoid processing old messages
+    // Listen for Messages
     const [initialMsgCount, setInitialMsgCount] = useState(() => messages.length);
 
     useEffect(() => {
         if (messages.length <= initialMsgCount) return;
 
-        // Scan ALL new messages, not just the last one
         const newMessages = messages.slice(initialMsgCount);
-        // console.log("ExplorationView New Messages:", newMessages);
+        setInitialMsgCount(messages.length);
 
-        const encounterEvent = newMessages.find((msg: any) => {
-            if (msg.type === 'CombatStarted') {
-                console.log("Found Combat Event:", msg);
-                console.log(`Checking ID Match: Event=${msg.attacker_id} (${typeof msg.attacker_id}) vs Profile=${profile?.id} (${typeof profile?.id})`);
-                const isMatch = msg.attacker_id == profile?.id;
-                console.log("ID Match Result:", isMatch);
-                return isMatch && msg.mode === 'pve';
+        newMessages.forEach((msg: any) => {
+            // 1. PvE Encounters
+            if (msg.type === 'CombatStarted' && msg.attacker_id == profile?.id && msg.mode === 'pve') {
+                navigate('/game/battle-select', {
+                    state: {
+                        encounterContext: msg.context,
+                        combatId: msg.combat_id,
+                        origin: 'exploration'
+                    }
+                });
             }
-            return false;
-        });
 
-        if (encounterEvent) {
-            // Update our message count tracker so we don't re-process this event
-            // But we probably will unmount anyway.
-            setInitialMsgCount(messages.length);
+            // 2. Multiplayer Movement
+            if (msg.type === 'PlayerMoved' && msg.player_id != profile?.id) {
+                setOtherPlayers(prev => ({
+                    ...prev,
+                    [msg.player_id]: { x: msg.x, y: msg.y, username: msg.username }
+                }));
+            }
 
-            // Auto-navigate to Battle Selection Screen with Context
-            navigate('/game/battle-select', {
-                state: {
-                    encounterContext: encounterEvent.context,
-                    combatId: encounterEvent.combat_id,
-                    origin: 'exploration'
+            // 3. Disconnections
+            if (msg.type === 'PlayerDisconnected') {
+                setOtherPlayers(prev => {
+                    const next = { ...prev };
+                    delete next[msg.player_id];
+                    return next;
+                });
+            }
+
+            // 4. Teleport (Server Sync Correction)
+            if (msg.type === 'TeleportPlayer') {
+                setPlayerPos({ x: msg.x, y: msg.y });
+                // If zone changed, update that too
+                if (msg.zone_id && msg.zone_id !== currentZoneIdRef.current) {
+                    setCurrentZoneId(msg.zone_id);
                 }
-            });
-        }
+            }
+        });
     }, [messages, initialMsgCount, profile, navigate]);
 
     // Handle Input
@@ -225,7 +220,7 @@ const ExplorationView: React.FC = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [move]);
 
-    // Sync Ref
+    // Sync Refs
     useEffect(() => {
         playerPosRef.current = playerPos;
     }, [playerPos]);
@@ -241,8 +236,6 @@ const ExplorationView: React.FC = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-
-
     // Render Loop
     useEffect(() => {
         if (!canvasRef.current || !mapData || !tilesetImage) return;
@@ -250,8 +243,6 @@ const ExplorationView: React.FC = () => {
         const ctx = canvasRef.current.getContext('2d');
         if (!ctx) return;
 
-        // Constants using dynamic cell size based on screen
-        // We use constant TILE_SIZE (48px) for rendering clarity, scaled by CSS if needed
         const renderTileSize = TILE_SIZE;
         const viewportW = isMobile ? 10 : VIEWPORT_TILES;
         const viewportH = isMobile ? 10 : VIEWPORT_TILES;
@@ -259,81 +250,82 @@ const ExplorationView: React.FC = () => {
         canvasRef.current.width = viewportW * renderTileSize;
         canvasRef.current.height = viewportH * renderTileSize;
 
-        // Camera Top-Left logic (centered on player)
         let camX = playerPos.x - Math.floor(viewportW / 2);
         let camY = playerPos.y - Math.floor(viewportH / 2);
 
-        // Clamp Camera
         camX = Math.max(0, Math.min(mapData.width - viewportW, camX));
         camY = Math.max(0, Math.min(mapData.height - viewportH, camY));
 
-        ctx.fillStyle = '#1e293b'; // Dark background
+        ctx.fillStyle = '#1e293b';
         ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-        // Define Tile SourceRect in Tileset (assuming 5 columns for now based on generator logic)
-        // Generator used IDs: 1=Grass, 6=Water, 11=Path, 16=Wall, 21=Tree
-        // This implies width of at least 5. Let's assume the image is 5 tiles wide (240px).
-        // If image is wider, we need to know. For now, assuming 5 cols.
         const APP_TILES_ROW_COUNT = 5;
 
         const drawTile = (tileId: number, screenX: number, screenY: number) => {
-            if (tileId === 0) return; // Empty
-            // Adjust ID if 1-indexed? Python script used 1-based logic (1=Grass) but array index 0?
-            // Python used 1... 
-            // Let's assume generated image top-left is ID 0.
-            // Python script used: GRASS=1. So if index is 1.
-            // Source X/Y
+            if (tileId === 0) return;
             const srcX = (tileId % APP_TILES_ROW_COUNT) * 48;
             const srcY = Math.floor(tileId / APP_TILES_ROW_COUNT) * 48;
 
             ctx.drawImage(tilesetImage,
-                srcX, srcY, 48, 48, // Source
-                screenX, screenY, renderTileSize, renderTileSize // Dest
+                srcX, srcY, 48, 48,
+                screenX, screenY, renderTileSize, renderTileSize
             );
         };
 
-        // Render Layers
+        // Render Map
         for (let y = 0; y < viewportH; y++) {
             for (let x = 0; x < viewportW; x++) {
                 const worldX = camX + x;
                 const worldY = camY + y;
                 const idx = worldY * mapData.width + worldX;
 
-                // 1. Ground
                 if (idx < mapData.layers.ground.length) {
                     drawTile(mapData.layers.ground[idx], x * renderTileSize, y * renderTileSize);
                 }
-
-                // 2. Objects (Under Player)
-                // In top-down, objects usually render AFTER player if y > player.y
-                // For simplicity, let's render objects here. 
-                // Z-Sorting is huge improvement but tricky in simple loop.
-                // We'll render objects "flat" for now. A tree you stand ON TOP of looks weird.
-                // Usually we render: Ground -> Player -> Overhead (Roof/TreeTop)
-                // Or: Ground -> [Sorted Entities]
                 if (mapData.layers.objects[idx] !== 0) {
                     drawTile(mapData.layers.objects[idx], x * renderTileSize, y * renderTileSize);
                 }
             }
         }
 
-        // Render Player
+        // Render Other Players
+        Object.entries(otherPlayers).forEach(([, p]) => {
+            const screenX = (p.x - camX) * renderTileSize;
+            const screenY = (p.y - camY) * renderTileSize;
+
+            if (screenX >= -TILE_SIZE && screenX < canvasRef.current!.width && screenY >= -TILE_SIZE && screenY < canvasRef.current!.height) {
+                // Shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.beginPath();
+                ctx.ellipse(screenX + renderTileSize / 2, screenY + renderTileSize - 5, 8, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Character
+                ctx.font = `${renderTileSize * 0.8}px serif`;
+                ctx.fillText('👤', screenX + renderTileSize / 2, screenY + renderTileSize / 2);
+
+                // Name Tag
+                ctx.font = 'bold 10px Inter, sans-serif';
+                ctx.fillStyle = 'white';
+                ctx.fillText(p.username, screenX + renderTileSize / 2, screenY - 5);
+            }
+        });
+
+        // Render Local Player
         const playerScreenX = (playerPos.x - camX) * renderTileSize;
         const playerScreenY = (playerPos.y - camY) * renderTileSize;
 
         ctx.font = `${renderTileSize}px serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.beginPath();
         ctx.ellipse(playerScreenX + renderTileSize / 2, playerScreenY + renderTileSize - 5, 10, 5, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Icon
-        ctx.fillStyle = '#8b5cf6'; // Primary Purple
+        ctx.fillStyle = '#8b5cf6';
         ctx.fillText('👤', playerScreenX + renderTileSize / 2, playerScreenY + renderTileSize / 2);
 
-    }, [mapData, tilesetImage, playerPos, isMobile]);
+    }, [mapData, tilesetImage, playerPos, isMobile, otherPlayers]);
 
     if (loading || !mapData) {
         return (
