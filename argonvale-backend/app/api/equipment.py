@@ -88,6 +88,19 @@ def feed_companion(item_id: int, companion_id: int, db: Session = Depends(get_db
         "new_hp": companion.hp
     }
 
+@router.delete("/{item_id}")
+def delete_item(item_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    item = db.query(Item).filter(Item.id == item_id, Item.owner_id == current_user.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    if item.is_equipped:
+        raise HTTPException(status_code=400, detail="Cannot discard equipped items")
+    
+    db.delete(item)
+    db.commit()
+    return {"status": "success", "message": f"Discarded {item.name}"}
+
 @router.post("/seed-test-items")
 def seed_items(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     test_items = [

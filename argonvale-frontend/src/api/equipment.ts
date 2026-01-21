@@ -36,5 +36,9 @@ export const equipmentApi = {
     async seedTestItems() {
         const response = await axios.post(`${API_URL}/api/equipment/seed-test-items`, {}, { headers: getAuthHeaders() });
         return response.data;
+    },
+    async discardItem(itemId: number) {
+        const response = await axios.delete(`${API_URL}/api/equipment/${itemId}`, { headers: getAuthHeaders() });
+        return response.data;
     }
 };

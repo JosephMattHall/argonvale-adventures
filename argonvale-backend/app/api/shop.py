@@ -19,6 +19,8 @@ class ShopItemResponse(BaseModel):
     image_url: str
     stats: dict
     effect: dict
+    rarity: str
+    stock: int
 
 @router.get("/items", response_model=List[ShopItemResponse])
 def get_shop_items(db: Session = Depends(get_db)):
@@ -34,8 +36,10 @@ def get_shop_items(db: Session = Depends(get_db)):
             description=i.description,
             image_url=i.image_url,
             stats=i.weapon_stats,
-            effect=i.effect
-        ) for i in items
+            effect=i.effect,
+            rarity=i.rarity,
+            stock=i.stock
+        ) for i in items if i.owner_id is None and not i.is_template and i.stock > 0
     ]
 
 @router.post("/buy/{item_id}")
@@ -44,12 +48,17 @@ def buy_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Find the system item (template)
-    template = db.query(Item).filter(Item.id == item_id, Item.owner_id == None).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Item not found")
+    # Find the system item listing (not template) with stock
+    item_listing = db.query(Item).filter(
+        Item.id == item_id, 
+        Item.owner_id == None, 
+        Item.is_template == False,
+        Item.stock > 0
+    ).first()
+    if not item_listing:
+        raise HTTPException(status_code=404, detail="Item out of stock or not found")
     
-    if current_user.coins < template.price:
+    if current_user.coins < item_listing.price:
         raise HTTPException(status_code=400, detail="Insufficient coins")
     
     # Use a transaction to ensure atomicity
@@ -59,22 +68,30 @@ def buy_item(
         # However, we can use a nested transaction or just ensure we commit at once.
         # For maximum safety, we'll manually manage the transaction for this critical path.
         
-        # Deduct coins and create item in one atomic step (flush then commit)
-        current_user.coins -= template.price
+        # Deduct coins and decrease stock
+        current_user.coins -= item_listing.price
+        item_listing.stock -= 1
         
-        # Create new item for user
+        # Create new item for user (copy from listing)
         new_item = Item(
-            name=template.name,
-            item_type=template.item_type,
-            weapon_stats=template.weapon_stats,
-            price=template.price,
-            owner_id=current_user.id
+            name=item_listing.name,
+            item_type=item_listing.item_type,
+            category=item_listing.category,
+            description=item_listing.description,
+            image_url=item_listing.image_url,
+            weapon_stats=item_listing.weapon_stats,
+            effect=item_listing.effect,
+            price=item_listing.price,
+            rarity=item_listing.rarity,
+            owner_id=current_user.id,
+            is_template=False,
+            stock=1 
         )
         db.add(new_item)
         db.commit()
         db.refresh(new_item)
         
-        return {"message": f"Successfully purchased {template.name}", "item_id": new_item.id}
+        return {"message": f"Successfully purchased {item_listing.name}", "item_id": new_item.id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Transaction failed: {str(e)}")

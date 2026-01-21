@@ -12,6 +12,8 @@ export interface ShopItem {
     image_url: string;
     stats: any;
     effect: any;
+    rarity: string;
+    stock: number;
 }
 
 export const shopApi = {

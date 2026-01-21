@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sword, Shield, Sparkles, Snowflake, EyeOff, Heart, Zap } from 'lucide-react';
+import { Sword, Shield, Sparkles, Snowflake, EyeOff, Heart, Zap, RotateCcw } from 'lucide-react';
 
 export interface ParsedStats {
     atk?: { [element: string]: number };
@@ -83,11 +83,11 @@ export const renderStatBadges = (item: any) => {
     if (item.effect?.type) {
         const type = item.effect.type;
         const chance = item.effect.chance ? (item.effect.chance * 100).toFixed(0) + '%' : '';
-        const Icon = type === 'freeze' ? Snowflake : type === 'stealth' ? EyeOff : Zap;
+        const Icon = type === 'freeze' ? Snowflake : type === 'stealth' ? EyeOff : type === 'reflect' ? RotateCcw : Zap;
 
         badges.push(
             <div key="effect" className="flex items-center gap-1 bg-white/5 text-gray-300 border border-white/10 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase">
-                <Icon size={8} className={type === 'freeze' ? 'text-cyan-400' : 'text-purple-400'} /> {chance || 'Effect'}
+                <Icon size={8} className={type === 'freeze' ? 'text-cyan-400' : type === 'stealth' ? 'text-purple-400' : 'text-orange-400'} /> {chance || type}
             </div>
         );
     }

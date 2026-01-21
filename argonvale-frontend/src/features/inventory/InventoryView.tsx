@@ -55,6 +55,22 @@ const InventoryView: React.FC = () => {
         }
     };
 
+    const handleDiscard = async (item: Item) => {
+        if (item.is_equipped) {
+            alert("Unequip the item first!");
+            return;
+        }
+        if (!confirm(`Are you sure you want to throw away ${item.name}?`)) return;
+
+        try {
+            await equipmentApi.discardItem(item.id);
+            loadData();
+            setMenuOpenId(null);
+        } catch (err: any) {
+            alert(err.response?.data?.detail || "Discard failed");
+        }
+    };
+
     const equippedCount = items.filter(i => i.is_equipped).length;
 
     if (loading) return <div className="p-8 text-center text-gold font-medieval animate-pulse">Consulting the treasury...</div>;
@@ -166,7 +182,10 @@ const InventoryView: React.FC = () => {
                                                     </div>
                                                 )}
 
-                                                <button className="w-full px-4 py-2.5 text-left text-xs text-red-400 hover:bg-red-500/20 flex items-center gap-2 transition-colors">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDiscard(item); }}
+                                                    className="w-full px-4 py-2.5 text-left text-xs text-red-400 hover:bg-red-500/20 flex items-center gap-2 transition-colors"
+                                                >
                                                     <Trash2 size={14} />
                                                     Throw Away
                                                 </button>

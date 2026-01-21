@@ -268,7 +268,15 @@ class CombatProcessor(BaseProcessor):
                         eff = item.get("effect", {})
                         if eff.get("type") == "freeze" and item.get("id") not in session.used_item_ids:
                             freeze_chance_total = max(freeze_chance_total, eff.get("chance", 0))
-    
+
+                # --- DEFENDER REFLECT (PvE) ---
+                reflect_chance = 0
+                for item in session.enemy_items:
+                    if item.get("item_type") in ["armor", "shield"]:
+                        eff = item.get("effect", {})
+                        if eff.get("type") == "reflect":
+                            reflect_chance = max(reflect_chance, eff.get("chance", 0))
+
                 current_player_def = base_def + def_icons
                 current_player_def = base_def + def_icons
     
@@ -303,6 +311,13 @@ class CombatProcessor(BaseProcessor):
                     if freeze_chance_total > 0 and random.random() <= freeze_chance_total:
                         session.enemy_frozen_until = session.turn + 1
                         atk_log += " The blow FROZE your opponent!"
+                    
+                    # Apply Reflection if triggered
+                    if reflect_chance > 0 and random.random() <= reflect_chance:
+                        reflected_dmg = int(sum(atk_icons_dict.values()) * 0.5)
+                        # Mitigate by player's own defense? Or just direct? Plan said direct.
+                        session.player_hp -= reflected_dmg
+                        atk_log += f" The enemy REFLECTED {reflected_dmg} damage back to you!"
     
                 log = " ".join(item_logs) + (" " if item_logs else "") + atk_log
                 
@@ -703,6 +718,23 @@ class CombatProcessor(BaseProcessor):
                 
                 if isinstance(d_val, dict): def_icons += sum(d_val.values())
                 elif isinstance(d_val, (int, float)): def_icons += d_val
+
+        # --- REFLECT (PvP) ---
+        reflect_chance = 0
+        def_gear = (session.enemy_weapons + session.enemy_items) if is_attacker else session.equipped_items
+        for item in def_gear:
+            if item.get("item_type") in ["armor", "shield"]:
+                eff = item.get("effect", {})
+                if eff.get("type") == "reflect":
+                    reflect_chance = max(reflect_chance, eff.get("chance", 0))
+        
+        if reflect_chance > 0 and random.random() <= reflect_chance:
+            reflected_dmg = int(sum(atk_icons_dict.values()) * 0.5)
+            if is_attacker: session.player_hp -= reflected_dmg
+            else: session.enemy_hp -= reflected_dmg
+            status_logs.append(f"Took {reflected_dmg} reflected damage")
+        # In _process_pvp_turn, we know who is attacking.
+        # Let's adjust _calculate_action_result to handle reflection.
 
         # Stance mod (placeholder for now in PvP as stance isn't explicitly passed in CombatAction yet)
         atk_mod = 1.0

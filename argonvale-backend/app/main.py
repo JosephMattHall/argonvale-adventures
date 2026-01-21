@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.logging import setup_logging
+import asyncio
+from app.db.session import SessionLocal
+from app.services.restock_service import restock_shop
 setup_logging()
 
 from app.auth import router as auth_router
@@ -38,6 +41,28 @@ app.include_router(equipment.router)
 app.include_router(shop.router, prefix="/api/shop", tags=["shop"])
 app.include_router(management.router)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+
+@app.on_event("startup")
+async def startup_event():
+    # Run initial restock
+    db = SessionLocal()
+    try:
+        restock_shop(db)
+    finally:
+        db.close()
+    
+    # Start background task
+    asyncio.create_task(background_restock())
+
+async def background_restock():
+    while True:
+        # Restock every 20 minutes
+        await asyncio.sleep(20 * 60)
+        db = SessionLocal()
+        try:
+            restock_shop(db)
+        finally:
+            db.close()
 
 @app.get("/")
 def read_root():

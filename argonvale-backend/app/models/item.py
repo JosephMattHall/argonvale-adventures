@@ -20,6 +20,9 @@ class Item(Base):
     effect = Column(JSON, default={})
     
     price = Column(Integer, default=0)
+    rarity = Column(String, default="Common") # Common, Uncommon, Rare, Ultra Rare, Relic
+    stock = Column(Integer, default=1)
+    is_template = Column(Boolean, default=False)
     is_equipped = Column(Boolean, default=False)
     is_consumable = Column(Boolean, default=False)
 

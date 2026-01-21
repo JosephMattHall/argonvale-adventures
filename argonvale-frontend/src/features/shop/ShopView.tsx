@@ -12,17 +12,19 @@ const ShopView: React.FC = () => {
     const [activeCategory, setActiveCategory] = useState<string>('all');
     const { profile, refreshProfile } = useUser();
 
+    const fetchItems = async () => {
+        setLoading(true);
+        try {
+            const data = await shopApi.getItems();
+            setItems(data);
+        } catch (err) {
+            console.error('Failed to fetch shop items:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchItems = async () => {
-            try {
-                const data = await shopApi.getItems();
-                setItems(data);
-            } catch (err) {
-                console.error('Failed to fetch shop items:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchItems();
     }, []);
 
@@ -32,7 +34,10 @@ const ShopView: React.FC = () => {
         setPurchasing(item.id);
         try {
             await shopApi.buyItem(item.id);
-            await refreshProfile();
+            await Promise.all([
+                refreshProfile(),
+                fetchItems()
+            ]);
             alert(`Successfully purchased ${item.name}!`);
         } catch (err: any) {
             alert(err.response?.data?.detail || "Purchase failed");
@@ -43,6 +48,16 @@ const ShopView: React.FC = () => {
 
     const categories = ['all', 'weapons', 'armor', 'food', 'utility'];
     const filteredItems = activeCategory === 'all' ? items : items.filter(i => i.category === activeCategory);
+
+    const getRarityColor = (rarity: string) => {
+        switch (rarity) {
+            case 'Relic': return 'text-purple-400 border-purple-500/50 shadow-glow-purple/20';
+            case 'Ultra Rare': return 'text-red-400 border-red-500/50 shadow-glow-red/20';
+            case 'Rare': return 'text-gold border-gold/50 shadow-glow-gold/20';
+            case 'Uncommon': return 'text-cyan-400 border-cyan-500/50 shadow-glow-cyan/20';
+            default: return 'text-gray-400 border-white/10';
+        }
+    };
 
     if (loading) {
         return (
@@ -119,6 +134,12 @@ const ShopView: React.FC = () => {
                                     <div className="absolute top-2 right-2 lg:top-3 lg:right-3 flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2 lg:px-2.5 py-0.5 lg:py-1 rounded-full border border-gold/30 shadow-2xl">
                                         <Coins size={10} className="text-gold" />
                                         <span className="text-[10px] lg:text-xs font-bold text-gold">{item.price}</span>
+                                    </div>
+                                    <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md border bg-black/60 text-[8px] font-bold uppercase tracking-wider ${getRarityColor(item.rarity)}`}>
+                                        {item.rarity}
+                                    </div>
+                                    <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/60 border border-white/10 text-[8px] text-gray-400 font-bold">
+                                        Stock: {item.stock}
                                     </div>
                                 </div>
 

@@ -66,6 +66,22 @@ def generate_weapons():
                 "effect": effect,
                 "price": random.randint(*tier["price_range"])
             })
+
+    # Hybrid & Reflective Gear
+    hybrid_weapons = [
+        {"name": "Twin Gladius", "stats": {"atk": {"Phys": 15}, "def": {"Phys": 10}}, "price": 450},
+        {"name": "Mirror Shield", "item_type": "shield", "stats": {"def": {"Water": 15}}, "effect": {"type": "reflect", "chance": 0.5}, "price": 800},
+        {"name": "Spiked Plate", "item_type": "armor", "stats": {"def": {"Earth": 20}}, "effect": {"type": "reflect", "chance": 0.25}, "price": 1200},
+        {"name": "Guardian Spear", "stats": {"atk": {"Light": 20}, "def": {"Phys": 15}}, "price": 1500},
+    ]
+    for hw in hybrid_weapons:
+        weapons.append({
+            "name": hw["name"],
+            "item_type": hw.get("item_type", "weapon"),
+            "stats": hw["stats"],
+            "effect": hw.get("effect", {}),
+            "price": hw["price"]
+        })
             
     # 20 Very Rare (Relic) Weapons
     relic_names = [
@@ -149,12 +165,34 @@ def seed_items():
         # Add to DB
         count = 0
         for data in items_data:
+            # Determine Rarity
+            name = data["name"]
+            rarity = "Common"
+            if "Relic:" in name: rarity = "Relic"
+            elif "(100%)" in name or "Crystal (100%)" in name: rarity = "Ultra Rare"
+            elif "High" in name or "300 HP" in name or "(50%)" in name or "Mirror Shield" in name or "Spiked Plate" in name: rarity = "Rare"
+            elif "Mid" in name or "100 HP" in name or "(25%)" in name: rarity = "Uncommon"
+            
+            # Category Mapping Fix
+            itype = data.get("item_type", "misc")
+            cat = "utility"
+            if itype == "weapon": cat = "weapons"
+            elif itype == "potion": cat = "utility"
+            elif itype == "utility": cat = "utility"
+            elif itype == "food": cat = "food"
+            elif itype in ["shield", "armor"]: cat = "armor"
+            elif itype == "misc": cat = "utility"
+
             new_item = Item(
                 name=data["name"],
-                item_type=data.get("item_type", "misc"),
+                item_type=itype,
+                category=cat,
                 weapon_stats=data.get("stats", {}),
                 effect=data.get("effect", {}),
                 price=data.get("price", 0),
+                rarity=rarity,
+                stock=0, # Templates have 0 stock
+                is_template=True,
                 owner_id=None,
                 is_equipped=False
             )
@@ -162,7 +200,7 @@ def seed_items():
             count += 1
         
         db.commit()
-        print(f"Successfully seeded {count} items.")
+        print(f"Successfully seeded {count} item templates.")
 
     except Exception as e:
         print(f"Error seeding items: {e}")
