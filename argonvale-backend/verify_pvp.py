@@ -128,23 +128,23 @@ async def run_client(username, password, opponent_username):
                             print(f"⚔️ {username} received Turn result:")
                             print(f"   Desc: {event.get('description')}")
                             
-                            # VERIFICATION CRITERIA
-                            # User A attacked User B.
-                            # User B attacked User A.
-                            # So both should see ~equal HP loss if simultaneous.
-                            # But specifically, the fields:
-                            # 'attacker_hp' = My HP
-                            # 'defender_hp' = Enemy HP
-                            
                             my_hp = event.get('attacker_hp')
                             enemy_hp = event.get('defender_hp')
                             print(f"   UPDATE: MyHP={my_hp} EnemyHP={enemy_hp}")
                             
-                            if my_hp < 100: # Assuming max is 100
-                                 print(f"   (I took damage, so 'attacker_hp' correctly reflects ME)")
-                            
-                            if "Battle Over" in event.get("description", "") or event.get("defender_hp") <= 0 or event.get("attacker_hp") <= 0: 
-                                return
+                            if my_hp <= 0 or enemy_hp <= 0:
+                                print(f"   Battle appears over for {username} via TurnProcessed")
+                                continue
+
+                            # ATTACK AGAIN
+                            await asyncio.sleep(1)
+                            print(f"{username} attacking again...")
+                            await ws.send_json({
+                                "type": "CombatAction",
+                                "combat_id": combat_id,
+                                "action_type": "attack",
+                                "stance": "normal"
+                            })
 
                         elif evt_type == "CombatEnded":
                             print(f"🏁 {username} Battle Ended. Winner: {event.get('winner_id')}")

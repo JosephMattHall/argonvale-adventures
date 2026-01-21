@@ -745,16 +745,11 @@ class GameServer:
                 await websocket.send_text(json.dumps(msg))
                 
                 # **PvP: Broadcast combat events to opponent**
-                if isinstance(evt, (TurnProcessed, CombatEnded)):
-                    # Check if this is a PvP battle
-                    combat_session = self.combat.sessions.get(evt.combat_id)
-                    if combat_session and combat_session.mode == "pvp":
-                        # Determine opponent ID
-                        if combat_session.attacker_id == user_id:
-                            opp_id = combat_session.defender_id
-                        else:
-                            opp_id = combat_session.attacker_id
-                        
+                if isinstance(evt, (TurnProcessed, CombatEnded)) and evt.mode == "pvp":
+                    # Determine opponent ID from event metadata
+                    opp_id = evt.defender_id if evt.attacker_id == user_id else evt.attacker_id
+                    
+                    if opp_id:
                         # Get opponent's active sockets and broadcast
                         opp_sockets = self.get_active_sockets_for_user(opp_id)
                         if opp_sockets:
@@ -769,9 +764,6 @@ class GameServer:
                                         # For the opponent:
                                         # 'attacker_hp' in the event is the ACTOR'S HP (User A)
                                         # 'defender_hp' in the event is the TARGET'S HP (User B)
-                                        # User B needs to see: 
-                                        #   player_hp = their own HP (which is defender_hp in the event)
-                                        #   enemy_hp = opponent's HP (which is attacker_hp in the event)
                                         
                                         # Swap HP values
                                         opp_msg["attacker_hp"] = msg["defender_hp"]

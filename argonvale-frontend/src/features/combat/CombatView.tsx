@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles } from 'lucide-react';
 import { useGameSocket } from '../../hooks/useGameSocket';
+import { useUser } from '../../context/UserContext';
 import type { Item } from '../../api/equipment';
 import { soundManager } from '../../utils/SoundManager';
 
@@ -18,6 +19,7 @@ interface BattleContext {
     enemy_hp: number;
     enemy_max_hp: number;
     enemy_type: string;
+    mode: 'pve' | 'pvp';
     enemy_image?: string;
     player_hp: number;
     player_max_hp: number;
@@ -35,6 +37,7 @@ interface BattleContext {
 const CombatView: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { profile } = useUser();
     const { sendCommand, messages } = useGameSocket();
 
     // Initial State
@@ -43,6 +46,7 @@ const CombatView: React.FC = () => {
         enemy_hp: 50,
         enemy_max_hp: 50,
         enemy_type: "Normal",
+        mode: "pve",
         player_hp: 100,
         player_max_hp: 100,
         companion_id: 0,
@@ -78,25 +82,28 @@ const CombatView: React.FC = () => {
     const [floatingDamage, setFloatingDamage] = useState<FloatingDamage[]>([]);
     const [playerAnimating, setPlayerAnimating] = useState<string | null>(null);
     const [enemyAnimating, setEnemyAnimating] = useState<string | null>(null);
+    const processedMessageIds = React.useRef<Set<string>>(new Set());
 
     useEffect(() => {
-        const combatEvents = messages.filter((m: any) =>
+        const newCombatEvents = messages.filter((m: any) =>
             (m.type === 'TurnProcessed' || m.type === 'CombatEnded') &&
-            (m.combat_id === combatId || m.combatId === combatId)
+            (m.combat_id === combatId || m.combatId === combatId) &&
+            !processedMessageIds.current.has(m.event_id || m.eventId)
         );
 
-        if (combatEvents.length > 0) {
-            const newLogs = ["Battle Started!"];
+        if (newCombatEvents.length > 0) {
             let lasthp = playerHp;
             let lastEnemyHp = enemyHp;
-            let over = false;
-            let res: "win" | "loss" | null = null;
-            let xp = 0;
+            let over = isBattleOver;
+            let res = result;
+            let xp = xpGained;
             let lootData = loot;
 
-            combatEvents.forEach((msg: any) => {
+            newCombatEvents.forEach((msg: any) => {
+                processedMessageIds.current.add(msg.event_id || msg.eventId);
+
                 if (msg.type === 'TurnProcessed') {
-                    newLogs.push(msg.description);
+                    setLogs(prev => [...prev, msg.description]);
                     setTurn(msg.turn_number);
                     setPlayerFrozenUntil(msg.player_frozen_until || 0);
                     setEnemyFrozenUntil(msg.enemy_frozen_until || 0);
@@ -106,7 +113,7 @@ const CombatView: React.FC = () => {
 
                     // Logic For Visual Feedback
                     if (msg.damage_dealt > 0) {
-                        const isPlayerAction = msg.actor_id !== 0;
+                        const isPlayerAction = (msg.actor_id !== 0 && msg.actor_id === profile?.id) || (msg.actor_id !== 0 && context.mode !== 'pvp');
                         if (isPlayerAction) {
                             setEnemyAnimating('animate-shake animate-flash-red');
                             setTimeout(() => setEnemyAnimating(null), 500);
@@ -129,14 +136,17 @@ const CombatView: React.FC = () => {
                 }
                 if (msg.type === 'CombatEnded') {
                     over = true;
-                    res = (msg.winner_id !== 0) ? 'win' : 'loss';
+                    if (context.mode === 'pvp') {
+                        res = (msg.winner_id === profile?.id) ? 'win' : 'loss';
+                    } else {
+                        res = (msg.winner_id !== 0) ? 'win' : 'loss';
+                    }
                     xp = msg.xp_gained || 0;
                     lootData = { coins: msg.loot?.coins, item: msg.dropped_item };
                     if (res === 'win') soundManager.play('levelUp');
                 }
             });
 
-            setLogs(newLogs);
             setPlayerHp(lasthp);
             setEnemyHp(lastEnemyHp);
             setXpGained(xp);
@@ -146,7 +156,7 @@ const CombatView: React.FC = () => {
                 setResult(res);
             }
         }
-    }, [messages, combatId]);
+    }, [messages, combatId, profile?.id, context.mode]);
 
     const handleAttack = () => {
         if (isBattleOver || turn <= playerFrozenUntil) return;

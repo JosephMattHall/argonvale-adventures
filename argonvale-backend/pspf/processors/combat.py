@@ -247,6 +247,9 @@ class CombatProcessor(BaseProcessor):
                 description=log,
                 attacker_hp=session.player_hp,
                 defender_hp=session.enemy_hp,
+                attacker_id=session.attacker_id,
+                defender_id=session.defender_id,
+                mode=session.mode,
                 player_frozen_until=session.player_frozen_until,
                 enemy_frozen_until=session.enemy_frozen_until,
                 player_stealth_until=session.player_stealth_until,
@@ -263,6 +266,8 @@ class CombatProcessor(BaseProcessor):
                 events.append(CombatEnded.create(
                     combat_id=session.combat_id,
                     winner_id=event.actor_id,
+                    attacker_id=session.attacker_id,
+                    defender_id=session.defender_id,
                     mode=session.mode,
                     loot={"coins": random.randint(15, 30)},
                     dropped_item=dropped,
@@ -368,6 +373,9 @@ class CombatProcessor(BaseProcessor):
                 actor_id=0,
                 damage_dealt=ai_final_dmg,
                 description=ai_action_log,
+                attacker_id=session.attacker_id,
+                defender_id=session.defender_id,
+                mode=session.mode,
                 attacker_hp=session.player_hp,
                 defender_hp=session.enemy_hp,
                 player_frozen_until=session.player_frozen_until,
@@ -381,6 +389,8 @@ class CombatProcessor(BaseProcessor):
                  events.append(CombatEnded.create(
                     combat_id=session.combat_id,
                     winner_id=0,
+                    attacker_id=session.attacker_id,
+                    defender_id=session.defender_id,
                     mode=session.mode,
                     xp_gained=0
                 ))
@@ -424,6 +434,9 @@ class CombatProcessor(BaseProcessor):
             description=combined_log,
             attacker_hp=session.player_hp,
             defender_hp=session.enemy_hp,
+            attacker_id=session.attacker_id,
+            defender_id=session.defender_id,
+            mode=session.mode,
             player_frozen_until=session.player_frozen_until,
             enemy_frozen_until=session.enemy_frozen_until,
             player_stealth_until=session.player_stealth_until,
@@ -439,6 +452,8 @@ class CombatProcessor(BaseProcessor):
             end_event = CombatEnded.create(
                 combat_id=session.combat_id,
                 winner_id=session.defender_id,
+                attacker_id=session.attacker_id,
+                defender_id=session.defender_id,
                 mode="pvp",
                 xp_gained=0
             )
@@ -448,6 +463,8 @@ class CombatProcessor(BaseProcessor):
             end_event = CombatEnded.create(
                 combat_id=session.combat_id,
                 winner_id=session.attacker_id,
+                attacker_id=session.attacker_id,
+                defender_id=session.defender_id,
                 mode="pvp",
                 xp_gained=0
             )

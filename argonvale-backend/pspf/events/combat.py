@@ -26,6 +26,11 @@ class TurnProcessed(GameEvent):
     attacker_hp: int
     defender_hp: int # In PvE, this is the monster
     
+    # Metadata for broadcasting
+    attacker_id: int
+    defender_id: Optional[int] = None
+    mode: Literal["pve", "pvp"] = "pve"
+    
     # Status Indicators
     player_frozen_until: int = 0
     enemy_frozen_until: int = 0
@@ -36,6 +41,8 @@ class TurnProcessed(GameEvent):
 class CombatEnded(GameEvent):
     combat_id: str
     winner_id: int
+    attacker_id: int
+    defender_id: Optional[int] = None
     mode: Literal["pve", "pvp"] = "pve"
     loot: Optional[Dict[str, Any]] = None
     dropped_item: Optional[Dict[str, Any]] = None # Item template data
