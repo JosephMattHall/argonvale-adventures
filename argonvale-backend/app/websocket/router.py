@@ -731,6 +731,30 @@ class GameServer:
                        logger.info(f"Auto-registering random encounter session: {out_event.combat_id}")
                        self.combat.process(turn_state, out_event)
 
+                # **Persistence: Save combat results to DB**
+                for out_event in output_events:
+                    if isinstance(out_event, CombatEnded):
+                        # Update PvP Stats
+                        if out_event.mode == "pvp":
+                             db_p = next(get_db())
+                             try:
+                                 u1 = db_p.query(User).filter(User.id == out_event.attacker_id).first()
+                                 u2 = db_p.query(User).filter(User.id == out_event.defender_id).first()
+                                 if u1: u1.pvp_total += 1
+                                 if u2: u2.pvp_total += 1
+                                 if out_event.winner_id != 0:
+                                     winner = db_p.query(User).filter(User.id == out_event.winner_id).first()
+                                     if winner:
+                                         winner.pvp_wins += 1
+                                 db_p.commit()
+                                 logger.info(f"PvP Stats Persisted for {out_event.combat_id}")
+                             except Exception as pe:
+                                 logger.error(f"PvP Stats Persistence Error: {pe}")
+                                 db_p.rollback()
+                             finally:
+                                 db_p.close()
+                             break # Only one end event per loop usually
+
                         
             except Exception as e:
                 print(f"Persistence Error: {e}")

@@ -15,6 +15,8 @@ export interface Profile {
     role: string;
     coins: number;
     has_starter: boolean;
+    pvp_wins: number;
+    pvp_total: number;
     last_x: number;
     last_y: number;
     last_zone_id: string;

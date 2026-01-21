@@ -4,7 +4,7 @@ import { profilesApi } from '../api/profiles';
 import type { Profile, Companion } from '../api/profiles';
 import { friendsApi } from '../api/friends';
 import CompanionCard from '../components/CompanionCard';
-import { User, UserPlus, MessageSquare, TrendingUp, Coins } from 'lucide-react';
+import { User, UserPlus, MessageSquare, TrendingUp, Coins, Swords } from 'lucide-react';
 
 const UserProfile: React.FC = () => {
     const { username } = useParams<{ username: string }>();
@@ -57,6 +57,32 @@ const UserProfile: React.FC = () => {
         }
     };
 
+    const handleChallenge = async (targetComp: Companion) => {
+        if (!profile) return;
+
+        try {
+            // In a real app, we might want to show a modal to select WHICH of our companions to use.
+            // For now, we'll use the user's active companion as per backend logic.
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/messages/challenge?recipient_id=${profile.id}&companion_id=${targetComp.id}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (response.ok) {
+                alert(`Challenge sent to ${targetComp.name}!`);
+                navigate(`/game/messages/${profile.id}`);
+            } else {
+                const err = await response.json();
+                alert(err.detail || 'Failed to send challenge');
+            }
+        } catch (error) {
+            console.error('Challenge error:', error);
+            alert('Failed to send challenge');
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -91,8 +117,14 @@ const UserProfile: React.FC = () => {
                             <div className="flex items-center justify-between mb-2">
                                 <h2 className="text-2xl font-medieval text-white">{profile.username}</h2>
                                 <div className="flex items-center gap-4 bg-dark rounded-full px-4 py-1.5 border border-gold/20 shadow-glow-gold/10">
-                                    <Coins size={18} className="text-gold" />
-                                    <span className="font-bold text-gold">{profile.coins}</span>
+                                    <div className="flex items-center gap-2 border-r border-white/10 pr-4">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400">PvP Record</span>
+                                        <span className="text-secondary font-bold font-mono">{profile.pvp_wins || 0}/{profile.pvp_total || 0}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Coins size={18} className="text-gold" />
+                                        <span className="font-bold text-gold">{profile.coins}</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -138,7 +170,15 @@ const UserProfile: React.FC = () => {
                     {companions.length > 0 ? (
                         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                             {companions.map((companion) => (
-                                <CompanionCard key={companion.id} companion={companion} />
+                                <CompanionCard
+                                    key={companion.id}
+                                    companion={companion}
+                                    action={{
+                                        label: "Challenge",
+                                        icon: <Swords size={14} />,
+                                        onClick: (c) => handleChallenge(c)
+                                    }}
+                                />
                             ))}
                         </div>
                     ) : (

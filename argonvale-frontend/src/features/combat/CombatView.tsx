@@ -63,7 +63,7 @@ const CombatView: React.FC = () => {
     const [enemyHp, setEnemyHp] = useState(context.enemy_hp);
     const [logs, setLogs] = useState<string[]>(["Battle Started!"]);
     const [isBattleOver, setIsBattleOver] = useState(false);
-    const [result, setResult] = useState<"win" | "loss" | null>(null);
+    const [result, setResult] = useState<"win" | "loss" | "draw" | null>(null);
     const [loot, setLoot] = useState<{ coins?: number, item?: any } | null>(null);
 
     // Status Effects
@@ -137,7 +137,9 @@ const CombatView: React.FC = () => {
                 if (msg.type === 'CombatEnded') {
                     over = true;
                     if (context.mode === 'pvp') {
-                        res = (msg.winner_id === profile?.id) ? 'win' : 'loss';
+                        if (msg.winner_id === profile?.id) res = 'win';
+                        else if (msg.winner_id === 0) res = 'draw';
+                        else res = 'loss';
                     } else {
                         res = (msg.winner_id !== 0) ? 'win' : 'loss';
                     }
@@ -340,9 +342,11 @@ const CombatView: React.FC = () => {
                     <div className="glass-panel flex-1 p-6 flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500 bg-primary/5 border-primary/30">
                         <div className="flex flex-col lg:flex-row items-center gap-8 w-full">
                             <div className="flex items-center gap-6 text-left">
-                                <div className="text-6xl">{result === 'win' ? '🏆' : '💀'}</div>
+                                <div className="text-6xl">{result === 'win' ? '🏆' : result === 'draw' ? '🤝' : '💀'}</div>
                                 <div>
-                                    <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : 'text-red-500'}`}>{result === 'win' ? 'VICTORY!' : 'DEFEAT'}</h2>
+                                    <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : result === 'draw' ? 'text-blue-400' : 'text-red-500'}`}>
+                                        {result === 'win' ? 'VICTORY!' : result === 'draw' ? 'DRAW' : 'DEFEAT'}
+                                    </h2>
                                     {result === 'win' && <div className="text-gold font-bold">+{xpGained} XP</div>}
                                 </div>
                             </div>
@@ -355,7 +359,17 @@ const CombatView: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                            <button onClick={() => navigate(location.state?.origin === 'exploration' ? '/game/explore' : '/game/battle-select')} className="btn-primary px-8 py-3 text-lg">{location.state?.origin === 'exploration' ? 'Continue' : 'Return'}</button>
+                            <button
+                                onClick={() => {
+                                    const origin = location.state?.origin;
+                                    if (origin === 'exploration') navigate('/game/explore');
+                                    else if (origin === 'messages') navigate('/game/messages');
+                                    else navigate('/game/battle-select');
+                                }}
+                                className="btn-primary px-8 py-3 text-lg"
+                            >
+                                {location.state?.origin === 'exploration' ? 'Continue' : 'Return'}
+                            </button>
                         </div>
                     </div>
                 )}

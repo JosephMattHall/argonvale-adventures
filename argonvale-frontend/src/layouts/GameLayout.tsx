@@ -35,7 +35,7 @@ const GameLayout: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Auto-navigate to combat on encounter
+    const processedCombatIds = React.useRef<Set<string>>(new Set());
 
     // Auto-navigate to combat on PvP match (Global Listener)
     useEffect(() => {
@@ -44,23 +44,27 @@ const GameLayout: React.FC = () => {
         const combatStarted = recentMessages.find((m: any) =>
             m.type === 'CombatStarted' &&
             m.mode === 'pvp' &&
-            (m.attacker_id === profile?.id || m.defender_id === profile?.id)
+            (m.attacker_id === profile?.id || m.defender_id === profile?.id) &&
+            !processedCombatIds.current.has(m.combat_id || m.combatId)
         );
 
         if (combatStarted) {
+            const cid = combatStarted.combat_id || combatStarted.combatId;
+            processedCombatIds.current.add(cid);
+
             // Check if we are already in battle to avoid loop/refresh issues
             if (!location.pathname.includes('/game/battle')) {
                 console.log("Global Listener: PvP Match Found! Navigating...", combatStarted);
                 navigate('/game/battle', {
                     state: {
                         battleContext: combatStarted.context,
-                        combatId: combatStarted.combat_id,
+                        combatId: cid,
                         origin: '/game/battle-select' // Default fallback
                     }
                 });
             }
         }
-    }, [messages, profile, navigate]);
+    }, [messages, profile, navigate, location.pathname]);
 
     return (
         <div className="h-screen w-full flex flex-col bg-dark">

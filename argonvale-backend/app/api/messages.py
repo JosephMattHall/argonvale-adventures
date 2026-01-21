@@ -6,7 +6,7 @@ from app.models.user import User
 from app.models.social import Message
 from app.auth.security import get_current_user
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
@@ -20,6 +20,8 @@ class MessageResponse(BaseModel):
     sender_id: int
     recipient_id: int
     content: str
+    message_type: str
+    challenge_metadata: Optional[str] = None
     is_read: bool
     timestamp: datetime
     sender_username: str
@@ -109,6 +111,8 @@ def get_conversation(
             "sender_id": msg.sender_id,
             "recipient_id": msg.recipient_id,
             "content": msg.content,
+            "message_type": msg.message_type,
+            "challenge_metadata": msg.challenge_metadata,
             "is_read": msg.is_read,
             "timestamp": msg.timestamp,
             "sender_username": sender.username if sender else "Unknown"
@@ -199,3 +203,99 @@ def start_conversation(
     db.commit()
     
     return {"message": "Conversation started", "recipient_id": recipient.id}
+
+@router.post("/challenge")
+def send_challenge(
+    recipient_id: int,
+    companion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send a PvP challenge to another user's companion"""
+    recipient = db.query(User).filter(User.id == recipient_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+    
+    from app.models.companion import Companion
+    challenger_comp = db.query(Companion).filter(Companion.owner_id == current_user.id, Companion.is_active == True).first()
+    target_comp = db.query(Companion).filter(Companion.id == companion_id).first()
+    
+    if not challenger_comp or not target_comp:
+         raise HTTPException(status_code=400, detail="Invalid companion team")
+
+    import json
+    challenge_metadata = {
+        "status": "pending",
+        "challenger_companion": {
+            "id": challenger_comp.id,
+            "name": challenger_comp.name,
+            "species": challenger_comp.species,
+            "stats": {"str": challenger_comp.strength, "def": challenger_comp.defense, "hp": challenger_comp.hp}
+        },
+        "target_companion": {
+            "id": target_comp.id,
+            "name": target_comp.name,
+            "species": target_comp.species,
+            "stats": {"str": target_comp.strength, "def": target_comp.defense, "hp": target_comp.hp}
+        }
+    }
+
+    message = Message(
+        sender_id=current_user.id,
+        recipient_id=recipient_id,
+        content=f"CHALLENGE: {current_user.username} has challenged {target_comp.name}!",
+        message_type="challenge",
+        challenge_metadata=json.dumps(challenge_metadata),
+        is_read=False,
+        timestamp=datetime.utcnow()
+    )
+    db.add(message)
+    db.commit()
+    return {"message": "Challenge sent", "id": message.id}
+
+@router.post("/challenge/{message_id}/respond")
+def respond_to_challenge(
+    message_id: int,
+    accept: bool,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Accept or decline a PvP challenge"""
+    message = db.query(Message).filter(Message.id == message_id, Message.recipient_id == current_user.id).first()
+    if not message or message.message_type != "challenge":
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    
+    import json
+    challenge_metadata = json.loads(message.challenge_metadata)
+    if challenge_metadata["status"] != "pending":
+         raise HTTPException(status_code=400, detail="Challenge already processed")
+
+    challenge_metadata["status"] = "accepted" if accept else "declined"
+    message.challenge_metadata = json.dumps(challenge_metadata)
+    
+    # Send reply
+    reply_content = f"Challenge {'accepted' if accept else 'declined'} by {current_user.username}!"
+    reply_metadata = challenge_metadata.copy()
+    
+    # If accepted, create a unique combat ID for this direct duel
+    combat_id = None
+    if accept:
+        import uuid
+        combat_id = f"duel_{str(uuid.uuid4())[:8]}"
+        reply_metadata["combat_id"] = combat_id
+        challenge_metadata["combat_id"] = combat_id
+        message.challenge_metadata = json.dumps(challenge_metadata)
+
+    reply_msg = Message(
+        sender_id=current_user.id,
+        recipient_id=message.sender_id,
+        content=reply_content,
+        message_type="challenge",
+        challenge_metadata=json.dumps(reply_metadata),
+        is_read=False,
+        timestamp=datetime.utcnow()
+    )
+    db.add(reply_msg)
+    db.commit()
+    
+    return {"message": "Response sent", "status": metadata["status"], "combat_id": combat_id}

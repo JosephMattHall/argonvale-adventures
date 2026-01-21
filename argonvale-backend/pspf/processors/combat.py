@@ -448,7 +448,20 @@ class CombatProcessor(BaseProcessor):
         session.turn += 1
         
         # Check win conditions
-        if session.player_hp <= 0:
+        if session.player_hp <= 0 and session.enemy_hp <= 0:
+            # TIE
+            end_event = CombatEnded.create(
+                combat_id=session.combat_id,
+                winner_id=0, # 0 means draw in PvP
+                attacker_id=session.attacker_id,
+                defender_id=session.defender_id,
+                mode="pvp",
+                xp_gained=0
+            )
+            events.append(end_event)
+            if session.combat_id in self.sessions:
+                del self.sessions[session.combat_id]
+        elif session.player_hp <= 0:
             end_event = CombatEnded.create(
                 combat_id=session.combat_id,
                 winner_id=session.defender_id,
@@ -458,7 +471,8 @@ class CombatProcessor(BaseProcessor):
                 xp_gained=0
             )
             events.append(end_event)
-            del self.sessions[session.combat_id]
+            if session.combat_id in self.sessions:
+                del self.sessions[session.combat_id]
         elif session.enemy_hp <= 0:
             end_event = CombatEnded.create(
                 combat_id=session.combat_id,
@@ -469,7 +483,8 @@ class CombatProcessor(BaseProcessor):
                 xp_gained=0
             )
             events.append(end_event)
-            del self.sessions[session.combat_id]
+            if session.combat_id in self.sessions:
+                del self.sessions[session.combat_id]
         
         return events
     
