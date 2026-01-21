@@ -86,8 +86,14 @@ const MyProfile: React.FC = () => {
                                     <div className="text-secondary font-bold text-xs uppercase tracking-widest">{profile.title}</div>
                                 </div>
                                 <div className="flex items-center justify-center gap-4 bg-dark rounded-full px-4 py-1.5 border border-gold/20 shadow-glow-gold/10">
-                                    <Coins size={18} className="text-gold" />
-                                    <span className="font-bold text-gold">{profile.coins}</span>
+                                    <div className="flex items-center gap-2 border-r border-white/10 pr-4">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400">PvP Record</span>
+                                        <span className="text-secondary font-bold font-mono">{profile.pvp_wins || 0}/{profile.pvp_total || 0}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Coins size={18} className="text-gold" />
+                                        <span className="font-bold text-gold">{profile.coins}</span>
+                                    </div>
                                 </div>
                             </div>
 

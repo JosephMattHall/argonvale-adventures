@@ -12,6 +12,8 @@ export interface Message {
     sender_id: number;
     recipient_id: number;
     content: string;
+    message_type: 'text' | 'challenge';
+    challenge_metadata?: string;
     is_read: boolean;
     timestamp: string;
     sender_username: string;
@@ -71,5 +73,12 @@ export const messagesApi = {
             headers: getAuthHeaders()
         });
         return response.data.count;
+    },
+
+    respondToChallenge: async (messageId: number, accept: boolean): Promise<{ status: string, combat_id?: string }> => {
+        const response = await axios.post(`${API_URL}/api/messages/challenge/${messageId}/respond?accept=${accept}`, {}, {
+            headers: getAuthHeaders()
+        });
+        return response.data;
     }
 };

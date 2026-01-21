@@ -104,6 +104,12 @@ const BattleSelection: React.FC = () => {
         sendCommand({ type: "JoinPvPQueue", companion_id: selectedCompanionId });
     };
 
+    const handleResumeBattle = (companionId: number) => {
+        setIsStarting(true);
+        setInitialMsgCount(messages.length);
+        sendCommand({ type: "ResumeCombat", companion_id: companionId });
+    };
+
     if (loading) return <div className="p-8 text-center text-gold font-medieval animate-pulse">Summoning combatants...</div>;
 
     const selectedCompanion = companions.find(c => c.id === selectedCompanionId);
@@ -176,6 +182,15 @@ const BattleSelection: React.FC = () => {
                                             <span className="font-medieval text-white text-xs lg:text-sm truncate pr-2">{comp.name}</span>
                                             <span className="text-[8px] lg:text-[10px] text-gray-500 font-bold shrink-0">L{comp.level}</span>
                                         </div>
+                                        {comp.current_combat_id && (
+                                            <button
+                                                disabled={comp.hp === 0}
+                                                onClick={(e) => { e.stopPropagation(); handleResumeBattle(comp.id); }}
+                                                className={`mb-2 px-2 py-0.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 rounded text-[9px] text-green-400 font-bold uppercase w-full text-center transition-colors ${comp.hp > 0 ? 'animate-pulse' : 'opacity-50 cursor-not-allowed'}`}
+                                            >
+                                                Resume Battle
+                                            </button>
+                                        )}
                                         <div className="space-y-1.5">
                                             <div className="flex items-center gap-2">
                                                 <div className="flex-1 h-1 bg-black/60 rounded-full overflow-hidden">

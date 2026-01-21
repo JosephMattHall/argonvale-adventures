@@ -16,7 +16,7 @@ from app.auth.security import SECRET_KEY, ALGORITHM
 # PSPF Imports
 from pspf.events.base import GameEvent
 from pspf.events.movement import PlayerMoved, LootFound
-from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue, LeavePvPQueue
+from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue, LeavePvPQueue, ResumeCombat, ForfeitCombat
 from pspf.events.training import TrainingStarted, TrainingCompleted
 from pspf.events.companion import ChooseStarter, CompanionCreated
 from pspf.processors.exploration import ExplorationProcessor
@@ -350,6 +350,7 @@ class GameServer:
                     out_evt = CombatStarted.create(
                         combat_id=combat_id,
                         attacker_id=user_id,
+                        attacker_companion_id=companion.id,
                         mode="pve",
                         context={
                             "enemy_name": opponent.get("name"),
@@ -359,8 +360,8 @@ class GameServer:
                             "enemy_weapons": opponent.get("weapons", []),
                             "enemy_items": opponent.get("items", []),
                             "enemy_image": opponent.get("image_url", "default_companion.png"),
-                            "companion_id": companion.id,
                             "companion_name": companion.name,
+                            "companion_element": companion.element,
                             "companion_image": companion.image_url,
                             "player_hp": companion.hp,
                             "player_max_hp": companion.max_hp,
@@ -422,6 +423,7 @@ class GameServer:
                         full_context.update({
                              "companion_id": companion.id,
                              "companion_name": companion.name,
+                             "companion_element": companion.element,
                              "companion_image": companion.image_url,
                              "player_hp": companion.hp,
                              "player_max_hp": companion.max_hp,
@@ -437,6 +439,7 @@ class GameServer:
                         start_event = CombatStarted.create(
                             combat_id=combat_id,
                             attacker_id=user_id,
+                            attacker_companion_id=companion_id,
                             mode="pve",
                             context=full_context
                         )
@@ -449,6 +452,21 @@ class GameServer:
                         
                 finally:
                     db.close()
+
+            elif msg_type == "ResumeCombat":
+                companion_id = payload.get("companion_id")
+                if companion_id:
+                    input_events.append(ResumeCombat.create(
+                        companion_id=int(companion_id)
+                    ))
+
+            elif msg_type == "ForfeitCombat":
+                combat_id = payload.get("combat_id")
+                if combat_id:
+                    input_events.append(ForfeitCombat.create(
+                        combat_id=combat_id,
+                        player_id=user_id
+                    ))
 
             # 3. Process Events
             
@@ -464,7 +482,7 @@ class GameServer:
                     output_events.extend(exploration_results)
 
                 # Combat
-                if isinstance(event, (CombatAction)):
+                if isinstance(event, (CombatAction, ForfeitCombat)):
                     output_events.extend(self.combat.process(turn_state, event))
 
                 # PvP Matchmaking
@@ -485,6 +503,7 @@ class GameServer:
                             if opp_id == user_id:
                                 continue
 
+                            logger.info(f"Checking status for candidate opponent {opp_id}")
                             # Dynamic Socket Lookup - Get ALL active sockets
                             opp_sockets = self.get_active_sockets_for_user(opp_id)
                             
@@ -547,14 +566,23 @@ class GameServer:
                                     "player_hp": c1.hp,
                                     "player_stats": {"str": c1.strength, "def": c1.defense, "spd": c1.speed},
                                     "companion_id": c1.id,
-                                    "enemy_type": c2.element,
                                     "companion_name": c1.name,
+                                    "companion_element": c1.element,
+                                    "enemy_type": c2.element,
                                     "companion_image": c1.image_url,
                                     "enemy_image": c2.image_url,
                                     "equipped_items": equipped1
                                 }
                                 
-                                evt1 = CombatStarted.create(combat_id=combat_id, attacker_id=user_id, defender_id=opp_id, mode="pvp", context=context)
+                                evt1 = CombatStarted.create(
+                                    combat_id=combat_id, 
+                                    attacker_id=user_id, 
+                                    attacker_companion_id=c1.id,
+                                    defender_id=opp_id, 
+                                    defender_companion_id=c2.id,
+                                    mode="pvp", 
+                                    context=context
+                                )
                                 
                                 context2 = context.copy()
                                 context2.update({
@@ -569,11 +597,20 @@ class GameServer:
                                     "player_stats": {"str": c2.strength, "def": c2.defense, "spd": c2.speed},
                                     "companion_id": c2.id,
                                     "companion_name": c2.name,
+                                    "companion_element": c2.element,
                                     "companion_image": c2.image_url,
                                     "enemy_type": c1.element,
                                     "equipped_items": equipped2
                                 })
-                                evt2 = CombatStarted.create(combat_id=combat_id, attacker_id=opp_id, defender_id=user_id, mode="pvp", context=context2)
+                                evt2 = CombatStarted.create(
+                                    combat_id=combat_id, 
+                                    attacker_id=opp_id, 
+                                    attacker_companion_id=c2.id,
+                                    defender_id=user_id, 
+                                    defender_companion_id=c1.id,
+                                    mode="pvp", 
+                                    context=context2
+                                )
                                 
                                 # Broadcast to ALL active sockets for opponent
                                 logger.info(f"Broadcasting match event to {len(opp_sockets)} active sockets for user {opp_id}")
@@ -582,6 +619,7 @@ class GameServer:
                                         msg = evt2.model_dump(mode='json')
                                         msg["type"] = "CombatStarted"
                                         await ws.send_text(json.dumps([msg]))
+                                        logger.info(f"Successfully broadcasted to socket {ws.client_state} for user {opp_id}")
                                     except Exception as e:
                                         logger.error(f"Failed to send to one of user {opp_id}'s sockets: {e}")
                                 
@@ -590,6 +628,16 @@ class GameServer:
                                 
                                 # Register in combat processor
                                 self.combat.process(None, evt1)
+                                
+                                # Persistence: Update current_combat_id for both companions
+                                try:
+                                    c1.current_combat_id = combat_id
+                                    c2.current_combat_id = combat_id
+                                    db.commit()
+                                    logger.info(f"PvP current_combat_id persisted: {combat_id}")
+                                except Exception as e:
+                                    logger.error(f"Failed to persist PvP current_combat_id: {e}")
+                                    db.rollback()
                             else:
                                 logger.warning(f"PvP Match Validation Failed: Invalid companions.")
                                 if not c1:
@@ -618,6 +666,31 @@ class GameServer:
                         await websocket.send_text(json.dumps([{"type": "Info", "message": "Left matchmaking queue."}]))
                     else:
                         logger.warning(f"User {user_id} tried to leave queue but wasn't in it")
+
+                # Resume Combat
+                if isinstance(event, ResumeCombat):
+                    db_r = SessionLocal()
+                    try:
+                        comp = db_r.query(Companion).filter(Companion.id == event.companion_id, Companion.owner_id == user_id).first()
+                        if comp and comp.current_combat_id:
+                            session = self.combat.get_session(comp.current_combat_id)
+                            if session:
+                                logger.info(f"Resuming session {comp.current_combat_id} for user {user_id}")
+                                # Create rehydration event
+                                resume_evt = session.to_start_event(user_id)
+                                output_events.append(resume_evt)
+                            else:
+                                logger.warning(f"Session {comp.current_combat_id} not found in processor for companion {comp.id}")
+                                # Clean up DB if session is gone from memory
+                                comp.current_combat_id = None
+                                db_r.commit()
+                                await websocket.send_text(json.dumps([{"type": "Error", "message": "Battle session has expired."}]))
+                        else:
+                            await websocket.send_text(json.dumps([{"type": "Error", "message": "No active battle found for this companion."}]))
+                    except Exception as re:
+                        logger.error(f"Resume Error: {re}")
+                    finally:
+                        db_r.close()
 
             # 4. Feedback Loop & Persistence
             db = SessionLocal()
@@ -728,8 +801,79 @@ class GameServer:
                         
                     # Logic Loop: Combat Started (Now handled for random encounters to register session)
                     if isinstance(out_event, CombatStarted):
-                       logger.info(f"Auto-registering random encounter session: {out_event.combat_id}")
-                       self.combat.process(turn_state, out_event)
+                        logger.info(f"Auto-registering random encounter session: {out_event.combat_id}")
+                        self.combat.process(turn_state, out_event)
+                        
+                        # Persistence: Update current_combat_id for the player's companion
+                        db_enc = SessionLocal()
+                        try:
+                            comp_id = out_event.context.get("companion_id")
+                            if comp_id:
+                                comp = db_enc.query(Companion).filter(Companion.id == comp_id).first()
+                                if comp:
+                                    comp.current_combat_id = out_event.combat_id
+                                    db_enc.commit()
+                                    logger.info(f"PvE current_combat_id persisted: {out_event.combat_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to persist PvE current_combat_id: {e}")
+                            db_enc.rollback()
+                        finally:
+                            db_enc.close()
+
+                # **Persistence: Save combat results to DB**
+                for out_event in output_events:
+                    if isinstance(out_event, CombatEnded):
+                        # Update PvP Stats
+                        if out_event.mode == "pvp":
+                             db_p = next(get_db())
+                             try:
+                                 u1 = db_p.query(User).filter(User.id == out_event.attacker_id).first()
+                                 u2 = db_p.query(User).filter(User.id == out_event.defender_id).first()
+                                 if u1: u1.pvp_total += 1
+                                 if u2: u2.pvp_total += 1
+                                 if out_event.winner_id != 0:
+                                     winner = db_p.query(User).filter(User.id == out_event.winner_id).first()
+                                     if winner:
+                                         winner.pvp_wins += 1
+                                 db_p.commit()
+                                 logger.info(f"PvP Stats Persisted for {out_event.combat_id}")
+                             except Exception as pe:
+                                 logger.error(f"PvP Stats Persistence Error: {pe}")
+                                 db_p.rollback()
+                             finally:
+                                 db_p.close()
+                             
+                             # Clear current_combat_id for both
+                             db_clear = SessionLocal()
+                             try:
+                                 comp1 = db_clear.query(Companion).filter(Companion.id == out_event.attacker_companion_id).first()
+                                 comp2 = db_clear.query(Companion).filter(Companion.id == out_event.defender_companion_id).first()
+                                 if comp1: comp1.current_combat_id = None
+                                 if comp2: comp2.current_combat_id = None
+                                 db_clear.commit()
+                                 logger.info(f"PvP current_combat_id cleared: {out_event.combat_id}")
+                             except Exception as e:
+                                 logger.error(f"Failed to clear PvP current_combat_id: {e}")
+                                 db_clear.rollback()
+                             finally:
+                                 db_clear.close()
+                             break # Only one end event per loop usually
+                        else:
+                            # PvE or other mode
+                            db_clear = SessionLocal()
+                            try:
+                                # We need the companion ID. For PvE it's in the event? 
+                                # CombatEnded usually has attacker_companion_id
+                                comp = db_clear.query(Companion).filter(Companion.id == out_event.attacker_companion_id).first()
+                                if comp:
+                                    comp.current_combat_id = None
+                                    db_clear.commit()
+                                    logger.info(f"PvE current_combat_id cleared: {out_event.combat_id}")
+                            except Exception as e:
+                                logger.error(f"Failed to clear PvE current_combat_id: {e}")
+                                db_clear.rollback()
+                            finally:
+                                db_clear.close()
 
                         
             except Exception as e:

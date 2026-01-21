@@ -4,6 +4,11 @@ import { Heart, Swords, Shield, Zap } from 'lucide-react';
 
 interface CompanionCardProps {
     companion: Companion;
+    action?: {
+        label: string;
+        onClick: (c: Companion) => void;
+        icon?: React.ReactNode;
+    };
 }
 
 const ELEMENT_COLORS: Record<string, string> = {
@@ -14,7 +19,7 @@ const ELEMENT_COLORS: Record<string, string> = {
     Shadow: 'bg-purple-500'
 };
 
-const CompanionCard: React.FC<CompanionCardProps> = ({ companion }) => {
+const CompanionCard: React.FC<CompanionCardProps> = ({ companion, action }) => {
     const elementColor = ELEMENT_COLORS[companion.element] || 'bg-gray-500';
 
     return (
@@ -66,6 +71,19 @@ const CompanionCard: React.FC<CompanionCardProps> = ({ companion }) => {
                     <span className="text-gray-300">{companion.speed}</span>
                 </div>
             </div>
+
+            {action && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        action.onClick(companion);
+                    }}
+                    className="w-full mt-4 btn-primary py-2 text-xs flex items-center justify-center gap-2"
+                >
+                    {action.icon}
+                    {action.label}
+                </button>
+            )}
         </div>
     );
 };

@@ -26,9 +26,10 @@ class Companion(Base):
     busy_until = Column(DateTime, nullable=True) # For timer-based tasks
     is_active = Column(Boolean, default=True)  # In active party (max 4)
     
-    # Hunger System
     hunger = Column(Integer, default=100) # 0-100
     last_fed_at = Column(DateTime, default=datetime.utcnow)
+    
+    current_combat_id = Column(String, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
 

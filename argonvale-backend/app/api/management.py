@@ -150,6 +150,49 @@ def claim_training_rewards(
         "leveled_up": companion.level > old_level
     }
 
+@router.post("/rapid-train/{companion_id}")
+def rapid_train_companion(
+    companion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """TESTING ONLY: Instantly grant 5 courses worth of XP"""
+    companion = db.query(Companion).filter(
+        Companion.id == companion_id,
+        Companion.owner_id == current_user.id
+    ).first()
+
+    if not companion:
+        raise HTTPException(status_code=404, detail="Companion not found")
+    
+    # Simulate 5 courses
+    total_xp_gained = 0
+    starting_level = companion.level
+    
+    for _ in range(5):
+        # Course XP = current level * 100
+        xp_reward = companion.level * 100
+        companion.xp += xp_reward
+        total_xp_gained += xp_reward
+        
+        # Level Up Logic
+        while companion.xp >= 100 * (companion.level ** 1.5):
+            companion.level += 1
+            companion.strength += 1
+            companion.defense += 1
+            companion.max_hp += 5
+            companion.hp = companion.max_hp
+
+    db.commit()
+    db.refresh(companion)
+
+    return {
+        "message": "Rapid training complete! (5 courses simulated)",
+        "xp_gained": total_xp_gained,
+        "new_level": companion.level,
+        "levels_gained": companion.level - starting_level
+    }
+
 @router.get("/status/{companion_id}", response_model=TrainingStatusResponse)
 def get_companion_management_status(
     companion_id: int,

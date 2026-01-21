@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles } from 'lucide-react';
+import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles, Info } from 'lucide-react';
+import { renderStatBadges } from '../../utils/itemUtils';
 import { useGameSocket } from '../../hooks/useGameSocket';
 import { useUser } from '../../context/UserContext';
 import type { Item } from '../../api/equipment';
@@ -32,6 +33,7 @@ interface BattleContext {
         spd: number;
     };
     equipped_items: Item[];
+    resumed?: boolean;
 }
 
 const CombatView: React.FC = () => {
@@ -61,9 +63,9 @@ const CombatView: React.FC = () => {
     const [playerHp, setPlayerHp] = useState(context.player_hp);
     const [playerMaxHp] = useState(context.player_max_hp);
     const [enemyHp, setEnemyHp] = useState(context.enemy_hp);
-    const [logs, setLogs] = useState<string[]>(["Battle Started!"]);
+    const [logs, setLogs] = useState<string[]>(context.resumed ? ["Reconnected to active battle!"] : ["Battle Started!"]);
     const [isBattleOver, setIsBattleOver] = useState(false);
-    const [result, setResult] = useState<"win" | "loss" | null>(null);
+    const [result, setResult] = useState<"win" | "loss" | "draw" | null>(null);
     const [loot, setLoot] = useState<{ coins?: number, item?: any } | null>(null);
 
     // Status Effects
@@ -137,7 +139,9 @@ const CombatView: React.FC = () => {
                 if (msg.type === 'CombatEnded') {
                     over = true;
                     if (context.mode === 'pvp') {
-                        res = (msg.winner_id === profile?.id) ? 'win' : 'loss';
+                        if (msg.winner_id === profile?.id) res = 'win';
+                        else if (msg.winner_id === 0) res = 'draw';
+                        else res = 'loss';
                     } else {
                         res = (msg.winner_id !== 0) ? 'win' : 'loss';
                     }
@@ -308,10 +312,28 @@ const CombatView: React.FC = () => {
                                             <div
                                                 key={item.id}
                                                 onClick={() => !isPlayerFrozen && !isSpent && toggleItem(item.id)}
-                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center transition-all p-1 relative ${isSpent ? 'opacity-20 grayscale border-white/5 cursor-not-allowed' : isSelected ? 'border-primary bg-primary/20 scale-105 z-10 cursor-pointer' : 'border-white/5 bg-black/20 hover:bg-white/5 cursor-pointer'}`}
+                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center transition-all p-1 relative group/battleitem ${isSpent ? 'opacity-20 grayscale border-white/5 cursor-not-allowed' : isSelected ? 'border-primary bg-primary/20 scale-105 z-10 cursor-pointer' : 'border-white/5 bg-black/20 hover:bg-white/5 cursor-pointer'}`}
                                             >
                                                 {isShield ? <Shield size={18} /> : isWeapon ? <Sword size={18} /> : <Sparkles size={18} className="text-emerald-400" />}
                                                 <div className="text-[7px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
+
+                                                {/* Combat Tooltip */}
+                                                {!isSpent && (
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover/battleitem:block z-[100] pointer-events-none">
+                                                        <div className="bg-black/95 border border-primary/30 rounded-lg p-3 text-[10px] text-white shadow-2xl backdrop-blur-md">
+                                                            <div className="text-primary uppercase font-bold mb-1 flex items-center gap-2">
+                                                                <Info size={12} /> {item.name}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                                {renderStatBadges(item)}
+                                                            </div>
+                                                            <p className="text-gray-400 italic text-[8px] leading-tight">
+                                                                {item.description || "Ancient battle gear."}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {!isSpent && item.effect?.type && (
                                                     <div className="absolute top-1 right-1">
                                                         {item.effect.type === 'freeze' ? <Snowflake size={8} className="text-cyan-400" /> : <EyeOff size={8} className="text-purple-400" />}
@@ -333,6 +355,20 @@ const CombatView: React.FC = () => {
                                     <Sword size={24} />
                                     <span className="font-medieval font-bold text-xs tracking-widest uppercase">Strike</span>
                                 </button>
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm("Are you sure you want to forfeit? This will count as a loss.")) {
+                                            sendCommand({
+                                                type: "ForfeitCombat",
+                                                combat_id: combatId
+                                            });
+                                        }
+                                    }}
+                                    className="h-full px-4 border border-red-500/30 hover:bg-red-500/10 text-red-500 rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
+                                >
+                                    <span className="text-xl">🏳️</span>
+                                    <span className="font-medieval font-bold text-[10px] tracking-widest uppercase">Forfeit</span>
+                                </button>
                             </div>
                         </div>
                     </>
@@ -340,9 +376,11 @@ const CombatView: React.FC = () => {
                     <div className="glass-panel flex-1 p-6 flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500 bg-primary/5 border-primary/30">
                         <div className="flex flex-col lg:flex-row items-center gap-8 w-full">
                             <div className="flex items-center gap-6 text-left">
-                                <div className="text-6xl">{result === 'win' ? '🏆' : '💀'}</div>
+                                <div className="text-6xl">{result === 'win' ? '🏆' : result === 'draw' ? '🤝' : '💀'}</div>
                                 <div>
-                                    <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : 'text-red-500'}`}>{result === 'win' ? 'VICTORY!' : 'DEFEAT'}</h2>
+                                    <h2 className={`text-4xl font-medieval ${result === 'win' ? 'text-gold' : result === 'draw' ? 'text-blue-400' : 'text-red-500'}`}>
+                                        {result === 'win' ? 'VICTORY!' : result === 'draw' ? 'DRAW' : 'DEFEAT'}
+                                    </h2>
                                     {result === 'win' && <div className="text-gold font-bold">+{xpGained} XP</div>}
                                 </div>
                             </div>
@@ -355,7 +393,17 @@ const CombatView: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                            <button onClick={() => navigate(location.state?.origin === 'exploration' ? '/game/explore' : '/game/battle-select')} className="btn-primary px-8 py-3 text-lg">{location.state?.origin === 'exploration' ? 'Continue' : 'Return'}</button>
+                            <button
+                                onClick={() => {
+                                    const origin = location.state?.origin;
+                                    if (origin === 'exploration') navigate('/game/explore');
+                                    else if (origin === 'messages') navigate('/game/messages');
+                                    else navigate('/game/battle-select');
+                                }}
+                                className="btn-primary px-8 py-3 text-lg"
+                            >
+                                {location.state?.origin === 'exploration' ? 'Continue' : 'Return'}
+                            </button>
                         </div>
                     </div>
                 )}

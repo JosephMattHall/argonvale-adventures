@@ -15,6 +15,8 @@ export interface Profile {
     role: string;
     coins: number;
     has_starter: boolean;
+    pvp_wins: number;
+    pvp_total: number;
     last_x: number;
     last_y: number;
     last_zone_id: string;
@@ -38,6 +40,7 @@ export interface Companion {
     status: string;
     hunger: number;
     last_fed_at: string;
+    current_combat_id?: string | null;
 }
 
 export const profilesApi = {

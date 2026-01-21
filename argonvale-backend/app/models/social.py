@@ -19,5 +19,7 @@ class Message(Base):
     sender_id = Column(Integer, ForeignKey("users.id"))
     recipient_id = Column(Integer, ForeignKey("users.id"))
     content = Column(String, nullable=False)
+    message_type = Column(String, default="text") # 'text', 'challenge'
+    challenge_metadata = Column(String, nullable=True) # JSON blob for context-specific data
     is_read = Column(Boolean, default=False)
     timestamp = Column(DateTime, default=datetime.utcnow)

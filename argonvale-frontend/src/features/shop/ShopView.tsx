@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { shopApi } from '../../api/shop';
 import type { ShopItem } from '../../api/shop';
 import { useUser } from '../../context/UserContext';
-import { Coins, Sword, Shield, ShoppingCart, Loader2, Utensils, Snowflake, EyeOff, Sparkles, Filter, Info } from 'lucide-react';
+import { Coins, ShoppingCart, Loader2, Info, Filter } from 'lucide-react';
+import { renderStatBadges } from '../../utils/itemUtils';
 
 const ShopView: React.FC = () => {
     const [items, setItems] = useState<ShopItem[]>([]);
@@ -42,16 +43,6 @@ const ShopView: React.FC = () => {
 
     const categories = ['all', 'weapons', 'armor', 'food', 'utility'];
     const filteredItems = activeCategory === 'all' ? items : items.filter(i => i.category === activeCategory);
-
-    const getEffectIcon = (type: string) => {
-        switch (type) {
-            case 'freeze': return <Snowflake size={14} className="text-cyan-400" />;
-            case 'stealth': return <EyeOff size={14} className="text-purple-400" />;
-            case 'hunger': return <Utensils size={14} className="text-orange-400" />;
-            case 'heal': return <Sparkles size={14} className="text-emerald-400" />;
-            default: return null;
-        }
-    };
 
     if (loading) {
         return (
@@ -144,36 +135,21 @@ const ShopView: React.FC = () => {
 
                                     {/* Stats & Effects Row */}
                                     <div className="flex flex-wrap gap-2 mt-auto min-h-[50px] content-start">
-                                        {/* Attack Stats */}
-                                        {item.stats?.attack && Object.entries(item.stats.attack).map(([type, val]: [any, any]) => (
-                                            <div key={type} className="flex items-center gap-1.5 bg-red-950/20 text-red-400 border border-red-900/30 px-2 py-1 rounded text-[9px] font-bold uppercase">
-                                                <Sword size={10} /> {val} {type}
-                                            </div>
-                                        ))}
-                                        {/* Defense Stats */}
-                                        {item.stats?.defense && Object.entries(item.stats.defense).map(([type, val]: [any, any]) => (
-                                            <div key={type} className="flex items-center gap-1.5 bg-emerald-950/20 text-emerald-400 border border-emerald-900/30 px-2 py-1 rounded text-[9px] font-bold uppercase">
-                                                <Shield size={10} /> {val} {type}
-                                            </div>
-                                        ))}
-                                        {/* Effects */}
+                                        {renderStatBadges(item)}
+                                        {/* Tooltip on Hover */}
                                         {item.effect?.type && (
-                                            <div className="flex items-center gap-1.5 bg-white/5 text-gold border border-gold/20 px-2 py-1 rounded text-[9px] font-bold uppercase relative group/info cursor-help">
-                                                {getEffectIcon(item.effect.type)}
-                                                {item.effect.type}
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 hidden group-hover/info:block z-50">
-                                                    <div className="bg-black border border-gold/30 rounded-lg p-3 text-[10px] text-white shadow-3xl">
-                                                        <div className="text-gold font-bold mb-1 uppercase tracking-wider flex items-center gap-2">
-                                                            <Info size={12} />
-                                                            {item.effect.type} Effect
-                                                        </div>
-                                                        <p className="text-gray-400 normal-case italic">
-                                                            {item.effect.type === 'freeze' ? 'High chance to immobilize the target for 1 turn.' :
-                                                                item.effect.type === 'stealth' ? 'Grants total evasion for the next turn.' :
-                                                                    item.effect.type === 'hunger' ? `Restores ${item.effect.value} hunger to a companion.` :
-                                                                        item.effect.type === 'heal' ? `Restores ${item.effect.value} HP instantly.` : 'A powerful mystery effect.'}
-                                                        </p>
+                                            <div className="absolute bottom-1/2 left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block z-50">
+                                                <div className="bg-black/95 border border-gold/30 rounded-lg p-3 text-[10px] text-white shadow-3xl backdrop-blur-md">
+                                                    <div className="text-gold font-bold mb-1 uppercase tracking-wider flex items-center gap-2">
+                                                        <Info size={12} />
+                                                        {item.effect.type} Effect
                                                     </div>
+                                                    <p className="text-gray-400 italic">
+                                                        {item.effect.type === 'freeze' ? `${(item.effect.chance * 100)}% chance to immobilize the target for 1 turn.` :
+                                                            item.effect.type === 'stealth' ? `${(item.effect.chance * 100)}% chance to grant evasion for 1 turn.` :
+                                                                item.effect.type === 'hunger' ? `Restores ${item.effect.value} hunger to a companion.` :
+                                                                    item.effect.type === 'heal' ? `Restores ${item.effect.value || 'max'} HP instantly.` : 'A powerful mystery effect.'}
+                                                    </p>
                                                 </div>
                                             </div>
                                         )}

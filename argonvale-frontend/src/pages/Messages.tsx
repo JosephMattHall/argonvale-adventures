@@ -4,7 +4,7 @@ import { messagesApi } from '../api/messages';
 import type { Conversation, Message } from '../api/messages';
 import { useNotifications } from '../context/NotificationContext';
 import { useUser } from '../context/UserContext';
-import { Send, User, MessageSquarePlus, ChevronLeft } from 'lucide-react';
+import { Send, User, MessageSquarePlus, ChevronLeft, Swords, Shield, Heart, Zap } from 'lucide-react';
 
 const Messages: React.FC = () => {
     const { userId } = useParams<{ userId?: string }>();
@@ -118,6 +118,54 @@ const Messages: React.FC = () => {
         }
     };
 
+    const handleRespondToChallenge = async (messageId: number, accept: boolean) => {
+        try {
+            const result = await messagesApi.respondToChallenge(messageId, accept);
+            if (accept && result.combat_id) {
+                // Handle combat start
+                console.log("Accepted! Combat ID:", result.combat_id);
+            }
+            // Reload conversation
+            if (selectedConversation) {
+                selectConversation(selectedConversation);
+            }
+        } catch (error) {
+            console.error('Failed to respond to challenge:', error);
+            alert('Failed to process challenge');
+        }
+    };
+
+    const handleEnterBattle = (combatId: string, metadata: any) => {
+        // Navigate to battle with the appropriate context
+        // We might need to fetch the companion data or trust the metadata
+        const isChallenger = metadata.challenger_companion.owner_id === profile?.id;
+
+        const battleContext = {
+            enemy_name: selectedConversation?.username || "Opponent",
+            enemy_hp: isChallenger ? metadata.target_companion?.stats.hp : metadata.challenger_companion?.stats.hp,
+            enemy_max_hp: isChallenger ? metadata.target_companion?.stats.hp : metadata.challenger_companion?.stats.hp,
+            enemy_type: "PvP",
+            mode: "pvp" as const,
+            player_hp: isChallenger ? metadata.challenger_companion?.stats.hp : metadata.target_companion?.stats.hp,
+            player_max_hp: isChallenger ? metadata.challenger_companion?.stats.hp : metadata.target_companion?.stats.hp,
+            companion_id: isChallenger ? metadata.challenger_companion?.id : metadata.target_companion?.id,
+            companion_name: isChallenger ? metadata.challenger_companion?.name : metadata.target_companion?.name,
+            companion_stats: {
+                str: isChallenger ? metadata.challenger_companion?.stats.str : metadata.target_companion?.stats.str,
+                def: isChallenger ? metadata.challenger_companion?.stats.def : metadata.target_companion?.stats.def,
+                spd: 10
+            },
+            equipped_items: []
+        };
+
+        navigate('/game/battle', {
+            state: {
+                combat_id: combatId,
+                battleContext: battleContext,
+                origin: 'messages'
+            }
+        });
+    };
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -230,13 +278,21 @@ const Messages: React.FC = () => {
                         <div className="flex-1 overflow-auto p-4 space-y-4">
                             {messages.map((msg) => {
                                 const isOwn = msg.sender_id === profile?.id;
+                                const isChallenge = msg.message_type === 'challenge';
+                                let challenge_metadata: any = null;
+                                try {
+                                    if (isChallenge && msg.challenge_metadata) challenge_metadata = JSON.parse(msg.challenge_metadata);
+                                } catch (e) {
+                                    console.error("Failed to parse metadata", e);
+                                }
+
                                 return (
                                     <div
                                         key={msg.id}
                                         className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div className={`
-                                            max-w-[85%] md:max-w-md p-3 rounded-2xl
+                                            max-w-[95%] md:max-w-lg p-3 rounded-2xl
                                             ${isOwn
                                                 ? 'bg-primary text-white rounded-tr-none shadow-glow/20'
                                                 : 'bg-dark-lighter text-gray-100 rounded-tl-none border border-white/5'}
@@ -247,7 +303,74 @@ const Messages: React.FC = () => {
                                                         {msg.sender_username}
                                                     </span>
                                                 )}
-                                                <p className="text-sm md:text-base leading-relaxed">{msg.content}</p>
+
+                                                {isChallenge && challenge_metadata ? (
+                                                    <div className="bg-black/40 rounded-xl p-4 border border-white/10 my-2">
+                                                        <div className="flex items-center gap-2 mb-4 text-secondary">
+                                                            <Swords size={20} />
+                                                            <span className="font-medieval text-lg tracking-tight">Companion Duel!</span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                                            {/* Challenger */}
+                                                            <div className="space-y-2">
+                                                                <div className="text-[8px] uppercase font-bold text-gray-500">Challenger</div>
+                                                                <div className="text-xs font-bold text-white truncate">{challenge_metadata.challenger_companion.name}</div>
+                                                                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                                                                    <div className="flex items-center gap-1"><Heart size={8} className="text-red-400" />{challenge_metadata.challenger_companion.stats.hp}</div>
+                                                                    <div className="flex items-center gap-1"><Swords size={8} className="text-orange-400" />{challenge_metadata.challenger_companion.stats.str}</div>
+                                                                    <div className="flex items-center gap-1"><Shield size={8} className="text-blue-400" />{challenge_metadata.challenger_companion.stats.def}</div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* VS */}
+                                                            <div className="space-y-2 border-l border-white/5 pl-4">
+                                                                <div className="text-[8px] uppercase font-bold text-gray-500">Target</div>
+                                                                <div className="text-xs font-bold text-white truncate">{challenge_metadata.target_companion.name}</div>
+                                                                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                                                                    <div className="flex items-center gap-1"><Heart size={8} className="text-red-400" />{challenge_metadata.target_companion.stats.hp}</div>
+                                                                    <div className="flex items-center gap-1"><Swords size={8} className="text-orange-400" />{challenge_metadata.target_companion.stats.str}</div>
+                                                                    <div className="flex items-center gap-1"><Shield size={8} className="text-blue-400" />{challenge_metadata.target_companion.stats.def}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-white/5">
+                                                            {challenge_metadata.status === 'pending' && !isOwn && (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => handleRespondToChallenge(msg.id, true)}
+                                                                        className="flex-1 btn-primary py-2 text-xs font-bold"
+                                                                    >Accept</button>
+                                                                    <button
+                                                                        onClick={() => handleRespondToChallenge(msg.id, false)}
+                                                                        className="flex-1 bg-white/5 hover:bg-white/10 rounded-lg py-2 text-xs font-bold transition-all text-white/60"
+                                                                    >Decline</button>
+                                                                </div>
+                                                            )}
+
+                                                            {challenge_metadata.status === 'accepted' && challenge_metadata.combat_id && (
+                                                                <button
+                                                                    onClick={() => handleEnterBattle(challenge_metadata.combat_id, challenge_metadata)}
+                                                                    className="w-full btn-primary py-2 text-xs font-bold flex items-center justify-center gap-2"
+                                                                >
+                                                                    <Zap size={14} className="animate-pulse" />
+                                                                    Enter Battle
+                                                                </button>
+                                                            )}
+
+                                                            {challenge_metadata.status === 'declined' && (
+                                                                <div className="text-center py-1 text-[10px] font-bold uppercase text-red-500/60 tracking-widest">Challenge Declined</div>
+                                                            )}
+
+                                                            {challenge_metadata.status === 'pending' && isOwn && (
+                                                                <div className="text-center py-1 text-[10px] font-bold uppercase text-gold/40 tracking-widest italic animate-pulse">Waiting for opponent...</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm md:text-base leading-relaxed">{msg.content}</p>
+                                                )}
                                             </div>
                                             <p className={`text-[10px] mt-1 ${isOwn ? 'text-white/60 text-right' : 'text-gray-500'}`}>
                                                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
