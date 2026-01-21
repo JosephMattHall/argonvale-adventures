@@ -44,3 +44,7 @@ class CombatEnded(GameEvent):
 class JoinPvPQueue(GameEvent):
     player_id: int
     companion_id: int
+
+class LeavePvPQueue(GameEvent):
+    """Player leaves the PvP matchmaking queue."""
+    pass

@@ -16,7 +16,7 @@ from app.auth.security import SECRET_KEY, ALGORITHM
 # PSPF Imports
 from pspf.events.base import GameEvent
 from pspf.events.movement import PlayerMoved, LootFound
-from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue
+from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue, LeavePvPQueue
 from pspf.events.training import TrainingStarted, TrainingCompleted
 from pspf.events.companion import ChooseStarter, CompanionCreated
 from pspf.processors.exploration import ExplorationProcessor
@@ -89,27 +89,33 @@ class GameServer:
 
     async def connect(self, websocket: WebSocket) -> bool:
         await websocket.accept()
+        print("DEBUG: WebSocket accepted")
         
         # 1. Authenticate
         token = websocket.query_params.get("token")
         if not token:
+            print("DEBUG: No token provided")
             await websocket.close(code=4003)
             return False
 
         db: Session = SessionLocal()
         try:
+            print(f"DEBUG: Decoding token: {token[:10]}...")
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
+            print(f"DEBUG: Token valid, username: {username}")
             if not username:
                 await websocket.close(code=4003)
                 return False
             
             user = db.query(User).filter(User.username == username).first()
             if not user:
+                print("DEBUG: User not found in DB")
                 await websocket.close(code=4003)
                 return False
             
             # 2. Load State
+            print("DEBUG: Loading user session")
             session = UserSession(user_id=user.id, username=username)
             session.current_zone = user.last_zone_id
             
@@ -124,11 +130,17 @@ class GameServer:
             self.sync.subscribe(session.current_zone, websocket)
             
             logger.info(f"User {username} (ID: {user.id}) connected.")
+            print("DEBUG: Connect successful")
             
             return True
 
-        except JWTError:
+        except JWTError as e:
+            print(f"DEBUG: JWT Error: {e}")
             await websocket.close(code=4003)
+            return False
+        except Exception as e:
+            print(f"DEBUG: Connect Exception: {e}")
+            await websocket.close(code=1011) # Internal Error
             return False
         finally:
             db.close()
@@ -163,6 +175,7 @@ class GameServer:
 
 
     async def handle_message(self, websocket: WebSocket, data: str):
+        print(f"DEBUG: Handle message: {data}")
         if websocket not in self.active_connections:
             return
 
@@ -300,6 +313,9 @@ class GameServer:
                         player_id=user_id,
                         companion_id=int(companion_id)
                     ))
+                    
+            elif msg_type == "LeavePvPQueue":
+                input_events.append(LeavePvPQueue.create())
 
             elif msg_type == "EnterCombat":
                 # Arena Battle Start
@@ -563,7 +579,9 @@ class GameServer:
                                 logger.info(f"Broadcasting match event to {len(opp_sockets)} active sockets for user {opp_id}")
                                 for ws in opp_sockets:
                                     try:
-                                        await ws.send_text(json.dumps([evt2.model_dump(mode='json')]))
+                                        msg = evt2.model_dump(mode='json')
+                                        msg["type"] = "CombatStarted"
+                                        await ws.send_text(json.dumps([msg]))
                                     except Exception as e:
                                         logger.error(f"Failed to send to one of user {opp_id}'s sockets: {e}")
                                 
@@ -587,6 +605,19 @@ class GameServer:
 
                         finally:
                             db.close()
+
+                # PvP Queue: Leave/Cancel
+                if isinstance(event, LeavePvPQueue):
+                    # Remove from queue
+                    before_count = len(self.pvp_queue)
+                    self.pvp_queue = [q for q in self.pvp_queue if q['user_id'] != user_id]
+                    after_count = len(self.pvp_queue)
+                    
+                    if before_count > after_count:
+                        logger.info(f"User {user_id} left PvP queue")
+                        await websocket.send_text(json.dumps([{"type": "Info", "message": "Left matchmaking queue."}]))
+                    else:
+                        logger.warning(f"User {user_id} tried to leave queue but wasn't in it")
 
             # 4. Feedback Loop & Persistence
             db = SessionLocal()
@@ -713,6 +744,50 @@ class GameServer:
                 msg["type"] = evt.__class__.__name__
                 await websocket.send_text(json.dumps(msg))
                 
+                # **PvP: Broadcast combat events to opponent**
+                if isinstance(evt, (TurnProcessed, CombatEnded)):
+                    # Check if this is a PvP battle
+                    combat_session = self.combat.sessions.get(evt.combat_id)
+                    if combat_session and combat_session.mode == "pvp":
+                        # Determine opponent ID
+                        if combat_session.attacker_id == user_id:
+                            opp_id = combat_session.defender_id
+                        else:
+                            opp_id = combat_session.attacker_id
+                        
+                        # Get opponent's active sockets and broadcast
+                        opp_sockets = self.get_active_sockets_for_user(opp_id)
+                        if opp_sockets:
+                            logger.info(f"Broadcasting {evt.__class__.__name__} to opponent {opp_id} ({len(opp_sockets)} sockets)")
+                            for opp_ws in opp_sockets:
+                                try:
+                                    # Create a copy of the message for the opponent
+                                    opp_msg = msg.copy()
+                                    
+                                    # SWAP LOGIC for PvP
+                                    if msg["type"] == "TurnProcessed":
+                                        # For the opponent:
+                                        # 'attacker_hp' in the event is the ACTOR'S HP (User A)
+                                        # 'defender_hp' in the event is the TARGET'S HP (User B)
+                                        # User B needs to see: 
+                                        #   player_hp = their own HP (which is defender_hp in the event)
+                                        #   enemy_hp = opponent's HP (which is attacker_hp in the event)
+                                        
+                                        # Swap HP values
+                                        opp_msg["attacker_hp"] = msg["defender_hp"]
+                                        opp_msg["defender_hp"] = msg["attacker_hp"]
+                                        
+                                        # Swap Status Effects
+                                        opp_msg["player_frozen_until"] = msg["enemy_frozen_until"]
+                                        opp_msg["enemy_frozen_until"] = msg["player_frozen_until"]
+                                        
+                                        opp_msg["player_stealth_until"] = msg["enemy_stealth_until"]
+                                        opp_msg["enemy_stealth_until"] = msg["player_stealth_until"]
+                                        
+                                    await opp_ws.send_text(json.dumps(opp_msg))
+                                except Exception as e:
+                                    logger.error(f"Failed to broadcast to opponent {opp_id}: {e}")
+                
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             await websocket.send_text(json.dumps({"error": str(e)}))
@@ -722,6 +797,7 @@ router = APIRouter()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    print("DEBUG: WebSocket connection attempt")
     success = await game_server.connect(websocket)
     if not success:
         return # Socket already closed

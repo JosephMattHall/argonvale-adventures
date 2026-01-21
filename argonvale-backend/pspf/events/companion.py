@@ -10,6 +10,7 @@ class CompanionCreated(GameEvent):
     name: str
     species: str
     image_url: str = "default_companion.png"
+    element: str
     stats: Dict[str, int]
     max_hp: int
 

@@ -39,9 +39,11 @@ class CombatSession:
         # Tracking for used consumables (one-time use per battle)
         self.used_item_ids = set()
         
-        # PvP: Track which player needs to act next
-        # In PvP, we wait for both players to submit actions before processing
-        self.waiting_for_player = None  # None = both can act, player_id = waiting for specific player
+        # PvP: Real-time synchronization state
+        self.pending_actions = {}  # {player_id: CombatAction} - collect actions from both players
+        self.current_turn_player = event.attacker_id if event.mode == "pvp" else None  # Whose turn it is
+        self.turn_start_time = None  # Timestamp when turn started (for timeout)
+        self.is_locked = False  # Prevent concurrent action processing
 
 class CombatProcessor(BaseProcessor):
     def __init__(self):
@@ -79,6 +81,32 @@ class CombatProcessor(BaseProcessor):
         elif isinstance(event, CombatAction):
             session = self.sessions.get(event.combat_id)
             if not session: return []
+            
+            # **PvP MODE: Collect actions from both players before processing**
+            if session.mode == "pvp":
+                actor_id = event.actor_id
+                
+                # Prevent concurrent processing
+                if session.is_locked:
+                    return []
+                
+               # Store this player's action
+                session.pending_actions[actor_id] = event
+                
+                # Check if we have both players' actions
+                player_ids = {session.attacker_id, session.defender_id}
+                if set(session.pending_actions.keys()) == player_ids:
+                    # Both submitted! Process the turn
+                    session.is_locked = True
+                    events = self._process_pvp_turn(session)
+                    session.pending_actions = {}
+                    session.is_locked = False
+                    return events
+                else:
+                    # Waiting for other player
+                    return []
+            
+            # **PvE MODE: Continue with existing single-player logic**
 
             # 1. Player Turn
             damage_dealt = 0
@@ -362,4 +390,99 @@ class CombatProcessor(BaseProcessor):
 
         return events
 
+    def _process_pvp_turn(self, session: 'CombatSession') -> list[GameEvent]:
+        """Process a PvP turn where both players have submitted their actions"""
+        events = []
+        
+        # Get both actions
+        p1_action = session.pending_actions.get(session.attacker_id)
+        p2_action = session.pending_actions.get(session.defender_id)
+        
+        if not p1_action or not p2_action:
+            return []
+        
+        # Process both actions simultaneously (MVP approach)
+        # TODO: Speed-based turn order in future iterations
+        
+        # Calculate results for both players
+        p1_damage, p1_log, p1_used_items = self._calculate_action_result(session, p1_action, True)
+        p2_damage, p2_log, p2_used_items = self._calculate_action_result(session, p2_action, False)
+        
+        # Apply damage
+        session.enemy_hp -= p1_damage
+        session.player_hp -= p2_damage
+        
+        # Combined log
+        combined_log = f"{p1_log} | {p2_log}"
+        
+        # Create turn event
+        turn_event = TurnProcessed.create(
+            combat_id=session.combat_id,
+            turn_number=session.turn,
+            actor_id=session.attacker_id,
+            damage_dealt=p1_damage,
+            description=combined_log,
+            attacker_hp=session.player_hp,
+            defender_hp=session.enemy_hp,
+            player_frozen_until=session.player_frozen_until,
+            enemy_frozen_until=session.enemy_frozen_until,
+            player_stealth_until=session.player_stealth_until,
+            enemy_stealth_until=session.enemy_stealth_until,
+            used_item_ids=list(p1_used_items | p2_used_items)
+        )
+        
+        events.append(turn_event)
+        session.turn += 1
+        
+        # Check win conditions
+        if session.player_hp <= 0:
+            end_event = CombatEnded.create(
+                combat_id=session.combat_id,
+                winner_id=session.defender_id,
+                mode="pvp",
+                xp_gained=0
+            )
+            events.append(end_event)
+            del self.sessions[session.combat_id]
+        elif session.enemy_hp <= 0:
+            end_event = CombatEnded.create(
+                combat_id=session.combat_id,
+                winner_id=session.attacker_id,
+                mode="pvp",
+                xp_gained=0
+            )
+            events.append(end_event)
+            del self.sessions[session.combat_id]
+        
         return events
+    
+    def _calculate_action_result(self, session: 'CombatSession', action: 'CombatAction', is_attacker: bool) -> tuple:
+        """Calculate damage from a player's action. Returns (damage, log, used_items_set)"""
+        damage = 0
+        logs = []
+        used_items = set()
+        
+        # Get stats
+        if is_attacker:
+            atk = session.player_stats.get("str", 10)
+            def_val = session.enemy_stats.get("def", 5)
+            frozen = session.turn <= session.player_frozen_until
+            opp_stealth = session.turn <= session.enemy_stealth_until
+        else:
+            atk = session.enemy_stats.get("str", 10)
+            def_val = session.player_stats.get("def", 5)
+            frozen = session.turn <= session.enemy_frozen_until
+            opp_stealth = session.turn <= session.player_stealth_until
+        
+        if frozen:
+            return 0, "Frozen!", used_items
+        
+        # Simple damage calc (MVP - items processing can be added later)
+        if opp_stealth:
+            damage = 0
+            logs.append("Miss (stealth)")
+        else:
+            damage, is_crit = self.calculate_damage(atk, def_val, 1.0, 1.0, True, False)
+            logs.append(f"{damage} dmg" + (" CRIT!" if is_crit else ""))
+        
+        return damage, "; ".join(logs), used_items

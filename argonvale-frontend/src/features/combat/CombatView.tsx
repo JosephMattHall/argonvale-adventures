@@ -154,7 +154,6 @@ const CombatView: React.FC = () => {
         sendCommand({
             type: "CombatAction",
             combat_id: combatId,
-            actor_id: 1,
             action_type: "attack",
             stance: currentStance,
             item_ids: selectedItems

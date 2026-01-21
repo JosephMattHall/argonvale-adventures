@@ -7,7 +7,7 @@ class Companion(Base):
     __tablename__ = "companions"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, index=True, nullable=False)
     species = Column(String, nullable=False)  # e.g., "Emberfang", "Stoneback Tortoise"
     element = Column(String, nullable=False)  # "Fire", "Earth", "Wind", "Shadow", "Water"
     image_url = Column(String, default="default_companion.png")
