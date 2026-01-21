@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Shield, Sword, Sparkles, MoreVertical, Trash2, Utensils, Zap, Snowflake, EyeOff } from 'lucide-react';
+import { Package, MoreVertical, Trash2, Utensils, Info, Sword, Shield, Sparkles } from 'lucide-react';
+import { renderStatBadges } from '../../utils/itemUtils';
 import type { Item } from '../../api/equipment';
 import { equipmentApi } from '../../api/equipment';
 import { companionsApi } from '../../api/companions';
@@ -55,16 +56,6 @@ const InventoryView: React.FC = () => {
     };
 
     const equippedCount = items.filter(i => i.is_equipped).length;
-
-    const getEffectIcon = (type: string) => {
-        switch (type) {
-            case 'freeze': return <Snowflake size={14} className="text-cyan-400" />;
-            case 'stealth': return <EyeOff size={14} className="text-purple-400" />;
-            case 'hunger': return <Utensils size={14} className="text-orange-400" />;
-            case 'heal': return <Zap size={14} className="text-emerald-400" />;
-            default: return null;
-        }
-    };
 
     if (loading) return <div className="p-8 text-center text-gold font-medieval animate-pulse">Consulting the treasury...</div>;
 
@@ -198,30 +189,22 @@ const InventoryView: React.FC = () => {
                                 </div>
 
                                 {/* Detail Icons Row */}
-                                <div className="flex flex-wrap gap-2 mt-auto">
-                                    {/* Attack Stats */}
-                                    {item.weapon_stats?.attack && Object.entries(item.weapon_stats.attack).map(([type, val]: [any, any]) => (
-                                        <div key={type} className="flex items-center gap-1 bg-red-950/30 text-red-400 border border-red-900/40 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                                            <Sword size={8} /> {val}
-                                        </div>
-                                    ))}
-                                    {/* Defense Stats */}
-                                    {item.weapon_stats?.defense && Object.entries(item.weapon_stats.defense).map(([type, val]: [any, any]) => (
-                                        <div key={type} className="flex items-center gap-1 bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                                            <Shield size={8} /> {val}
-                                        </div>
-                                    ))}
-                                    {/* Effects */}
-                                    {item.effect?.type && (
-                                        <div className="flex items-center gap-1 bg-white/5 text-gray-300 border border-white/10 px-1.5 py-0.5 rounded text-[9px] font-bold group/info relative cursor-help">
-                                            {getEffectIcon(item.effect.type)}
-                                            {item.effect.chance ? `${(item.effect.chance * 100).toFixed(0)}%` : item.effect.value}
+                                <div className="flex flex-wrap gap-2 mt-auto min-h-[30px] content-start">
+                                    {renderStatBadges(item)}
 
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 hidden group-hover/info:block z-50">
-                                                <div className="bg-black border border-white/10 rounded-lg p-2 text-[8px] text-white shadow-2xl">
-                                                    <span className="text-gold uppercase block mb-1">{item.effect.type}</span>
-                                                    Effect: {item.effect.type === 'hunger' ? `Restores ${item.effect.value} hunger` : `${(item.effect.chance * 100)}% chance of ${item.effect.type}`}
+                                    {/* Detailed Tooltip on Hover */}
+                                    {item.effect?.type && (
+                                        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block z-50">
+                                            <div className="bg-black/95 border border-white/10 rounded-lg p-3 text-[10px] text-white shadow-2xl backdrop-blur-md">
+                                                <div className="text-gold uppercase font-bold mb-1 flex items-center gap-2">
+                                                    <Info size={12} /> {item.effect.type}
                                                 </div>
+                                                <p className="text-gray-400 italic">
+                                                    {item.effect.type === 'freeze' ? `${(item.effect.chance * 100)}% chance to immobilize the target.` :
+                                                        item.effect.type === 'stealth' ? `${(item.effect.chance * 100)}% chance to grant evasion.` :
+                                                            item.effect.type === 'hunger' ? `Restores ${item.effect.value} hunger.` :
+                                                                item.effect.type === 'heal' ? `Restores ${item.effect.value} HP.` : 'Mysterious effect.'}
+                                                </p>
                                             </div>
                                         </div>
                                     )}

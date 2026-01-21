@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles } from 'lucide-react';
+import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles, Info } from 'lucide-react';
+import { renderStatBadges } from '../../utils/itemUtils';
 import { useGameSocket } from '../../hooks/useGameSocket';
 import { useUser } from '../../context/UserContext';
 import type { Item } from '../../api/equipment';
@@ -311,10 +312,28 @@ const CombatView: React.FC = () => {
                                             <div
                                                 key={item.id}
                                                 onClick={() => !isPlayerFrozen && !isSpent && toggleItem(item.id)}
-                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center transition-all p-1 relative ${isSpent ? 'opacity-20 grayscale border-white/5 cursor-not-allowed' : isSelected ? 'border-primary bg-primary/20 scale-105 z-10 cursor-pointer' : 'border-white/5 bg-black/20 hover:bg-white/5 cursor-pointer'}`}
+                                                className={`aspect-square rounded-lg border flex flex-col items-center justify-center transition-all p-1 relative group/battleitem ${isSpent ? 'opacity-20 grayscale border-white/5 cursor-not-allowed' : isSelected ? 'border-primary bg-primary/20 scale-105 z-10 cursor-pointer' : 'border-white/5 bg-black/20 hover:bg-white/5 cursor-pointer'}`}
                                             >
                                                 {isShield ? <Shield size={18} /> : isWeapon ? <Sword size={18} /> : <Sparkles size={18} className="text-emerald-400" />}
                                                 <div className="text-[7px] text-gray-400 font-bold uppercase truncate px-1 w-full text-center mt-1">{item.name}</div>
+
+                                                {/* Combat Tooltip */}
+                                                {!isSpent && (
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover/battleitem:block z-[100] pointer-events-none">
+                                                        <div className="bg-black/95 border border-primary/30 rounded-lg p-3 text-[10px] text-white shadow-2xl backdrop-blur-md">
+                                                            <div className="text-primary uppercase font-bold mb-1 flex items-center gap-2">
+                                                                <Info size={12} /> {item.name}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                                {renderStatBadges(item)}
+                                                            </div>
+                                                            <p className="text-gray-400 italic text-[8px] leading-tight">
+                                                                {item.description || "Ancient battle gear."}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {!isSpent && item.effect?.type && (
                                                     <div className="absolute top-1 right-1">
                                                         {item.effect.type === 'freeze' ? <Snowflake size={8} className="text-cyan-400" /> : <EyeOff size={8} className="text-purple-400" />}
