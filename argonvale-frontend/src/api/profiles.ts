@@ -40,6 +40,7 @@ export interface Companion {
     status: string;
     hunger: number;
     last_fed_at: string;
+    current_combat_id?: string | null;
 }
 
 export const profilesApi = {

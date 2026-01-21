@@ -20,6 +20,7 @@ class CompanionResponse(CompanionBase):
     xp: int
     hunger: int
     last_fed_at: datetime
+    current_combat_id: str | None = None
     
     class Config:
         from_attributes = True

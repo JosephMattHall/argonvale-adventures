@@ -106,6 +106,21 @@ const TrainingView: React.FC = () => {
         }
     };
 
+    const handleRapidTrain = async () => {
+        if (!selectedId || actionLoading) return;
+        setActionLoading(true);
+        try {
+            const result = await managementApi.rapidTrain(selectedId);
+            alert(result.message);
+            await loadData(); // Reload for stats/level
+            await loadStatus(selectedId);
+        } catch (error: any) {
+            alert(error.response?.data?.detail || 'Rapid training failed');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     const handleHeal = async () => {
         if (!selectedCompanion || actionLoading) return;
         if (!profile || profile.coins < healingCost) {
@@ -259,6 +274,15 @@ const TrainingView: React.FC = () => {
                                                 <div className="text-2xl font-mono text-white">+{selectedCompanion.level * 100}</div>
                                             </div>
                                         </div>
+
+                                        <button
+                                            onClick={handleRapidTrain}
+                                            disabled={actionLoading}
+                                            className="w-full py-2 mb-4 text-xs font-bold text-gold/60 hover:text-gold border border-gold/10 hover:border-gold/30 rounded-lg transition-all uppercase tracking-widest"
+                                        >
+                                            [Temporary] Quick Train (+5 Courses)
+                                        </button>
+
                                         <button
                                             onClick={handleStartTraining}
                                             disabled={actionLoading}

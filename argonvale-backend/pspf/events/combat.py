@@ -5,7 +5,9 @@ from app.schemas.items import WeaponStats
 class CombatStarted(GameEvent):
     combat_id: str
     attacker_id: int
+    attacker_companion_id: int
     defender_id: Optional[int] = None # None for AI
+    defender_companion_id: Optional[int] = None
     mode: Literal["pve", "pvp"] = "pve"
     context: Dict[str, Any] = {} # stats, names, etc
 
@@ -42,7 +44,9 @@ class CombatEnded(GameEvent):
     combat_id: str
     winner_id: int
     attacker_id: int
+    attacker_companion_id: int
     defender_id: Optional[int] = None
+    defender_companion_id: Optional[int] = None
     mode: Literal["pve", "pvp"] = "pve"
     loot: Optional[Dict[str, Any]] = None
     dropped_item: Optional[Dict[str, Any]] = None # Item template data
@@ -55,3 +59,10 @@ class JoinPvPQueue(GameEvent):
 class LeavePvPQueue(GameEvent):
     """Player leaves the PvP matchmaking queue."""
     pass
+
+class ResumeCombat(GameEvent):
+    companion_id: int
+
+class ForfeitCombat(GameEvent):
+    combat_id: str
+    player_id: int

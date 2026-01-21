@@ -52,6 +52,14 @@ export const managementApi = {
         return response.data;
     },
 
+    rapidTrain: async (companionId: number) => {
+        const token = localStorage.getItem('token');
+        const response = await axios.post(`${API_BASE_URL}/api/management/rapid-train/${companionId}`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    },
+
     getStatus: async (companionId: number): Promise<TrainingStatus> => {
         const token = localStorage.getItem('token');
         const response = await axios.get(`${API_BASE_URL}/api/management/status/${companionId}`, {

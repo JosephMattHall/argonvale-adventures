@@ -32,6 +32,7 @@ interface BattleContext {
         spd: number;
     };
     equipped_items: Item[];
+    resumed?: boolean;
 }
 
 const CombatView: React.FC = () => {
@@ -61,7 +62,7 @@ const CombatView: React.FC = () => {
     const [playerHp, setPlayerHp] = useState(context.player_hp);
     const [playerMaxHp] = useState(context.player_max_hp);
     const [enemyHp, setEnemyHp] = useState(context.enemy_hp);
-    const [logs, setLogs] = useState<string[]>(["Battle Started!"]);
+    const [logs, setLogs] = useState<string[]>(context.resumed ? ["Reconnected to active battle!"] : ["Battle Started!"]);
     const [isBattleOver, setIsBattleOver] = useState(false);
     const [result, setResult] = useState<"win" | "loss" | "draw" | null>(null);
     const [loot, setLoot] = useState<{ coins?: number, item?: any } | null>(null);
@@ -334,6 +335,20 @@ const CombatView: React.FC = () => {
                                 >
                                     <Sword size={24} />
                                     <span className="font-medieval font-bold text-xs tracking-widest uppercase">Strike</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm("Are you sure you want to forfeit? This will count as a loss.")) {
+                                            sendCommand({
+                                                type: "ForfeitCombat",
+                                                combat_id: combatId
+                                            });
+                                        }
+                                    }}
+                                    className="h-full px-4 border border-red-500/30 hover:bg-red-500/10 text-red-500 rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
+                                >
+                                    <span className="text-xl">🏳️</span>
+                                    <span className="font-medieval font-bold text-[10px] tracking-widest uppercase">Forfeit</span>
                                 </button>
                             </div>
                         </div>
