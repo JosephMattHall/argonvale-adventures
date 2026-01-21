@@ -188,6 +188,8 @@ class CombatProcessor(BaseProcessor):
     
                 item_logs = []
                 # Icons by type for the advantage system
+                base_str = session.player_stats.get("str", 10)
+                base_def = session.player_stats.get("def", 5)
                 atk_icons_dict = {"Phys": base_str}
                 def_icons = 0
                 
@@ -241,8 +243,6 @@ class CombatProcessor(BaseProcessor):
                     session.used_item_ids.add(item_id)
     
                 # 2. Calculate Damage/Defense from Gear
-                base_str = session.player_stats.get("str", 10)
-                base_def = session.player_stats.get("def", 5)
                 freeze_chance_total = 0
     
                 for item in session.equipped_items:
@@ -278,7 +278,6 @@ class CombatProcessor(BaseProcessor):
                             reflect_chance = max(reflect_chance, eff.get("chance", 0))
 
                 current_player_def = base_def + def_icons
-                current_player_def = base_def + def_icons
     
                 # 3. Apply Stance Modifiers
                 stance_atk_mod = 1.0
@@ -296,6 +295,9 @@ class CombatProcessor(BaseProcessor):
                         d_v = i.get("stats", {}).get("def", {}) or i.get("stats", {}).get("defense", {})
                         if isinstance(d_v, dict): ai_def_icons += sum(d_v.values())
                         elif isinstance(d_v, (int, float)): ai_def_icons += d_v
+                
+                total_enemy_def = enemy_def + ai_def_icons
+                enemy_stealth = session.turn <= session.enemy_stealth_until
                 
                 damage_dealt, crit = self.calculate_damage(atk_icons_dict, total_enemy_def, session.enemy_element, stance_atk_mod, 1.0, enemy_stealth)
                 session.enemy_hp -= damage_dealt

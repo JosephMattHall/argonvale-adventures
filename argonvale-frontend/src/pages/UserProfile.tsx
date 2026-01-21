@@ -12,7 +12,8 @@ const UserProfile: React.FC = () => {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [companions, setCompanions] = useState<Companion[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isFriend, setIsFriend] = useState(false);
+    const [friendStatus, setFriendStatus] = useState<'none' | 'friend' | 'pending_sent' | 'pending_received'>('none');
+    const [pendingRequestId, setPendingRequestId] = useState<number | null>(null);
 
     useEffect(() => {
         if (username) {
@@ -30,9 +31,24 @@ const UserProfile: React.FC = () => {
             const companionsData = await profilesApi.getUserCompanions(username);
             setCompanions(companionsData);
 
-            // Check if already friends
-            const friends = await friendsApi.getFriends();
-            setIsFriend(friends.some(f => f.username === username));
+            // Check friend status
+            const [friends, requests] = await Promise.all([
+                friendsApi.getFriends(),
+                friendsApi.getFriendRequests()
+            ]);
+
+            if (friends.some(f => f.username === username)) {
+                setFriendStatus('friend');
+            } else {
+                const pending = requests.find(r => r.requester.username === username);
+                if (pending) {
+                    setFriendStatus('pending_received');
+                    setPendingRequestId(pending.id);
+                } else {
+                    setFriendStatus('none');
+                    setPendingRequestId(null);
+                }
+            }
         } catch (error) {
             console.error('Failed to load profile:', error);
         } finally {
@@ -45,9 +61,23 @@ const UserProfile: React.FC = () => {
 
         try {
             await friendsApi.sendFriendRequest(username);
+            setFriendStatus('pending_sent');
             alert('Friend request sent!');
         } catch (error: any) {
             alert(error.response?.data?.detail || 'Failed to send friend request');
+        }
+    };
+
+    const handleAcceptFriend = async () => {
+        if (!pendingRequestId) return;
+
+        try {
+            await friendsApi.acceptFriendRequest(pendingRequestId);
+            setFriendStatus('friend');
+            setPendingRequestId(null);
+            alert('Friend request accepted!');
+        } catch (error: any) {
+            alert(error.response?.data?.detail || 'Failed to accept friend request');
         }
     };
 
@@ -136,14 +166,38 @@ const UserProfile: React.FC = () => {
 
                             {/* Action Buttons */}
                             <div className="flex gap-3 mt-6">
-                                {!isFriend && (
+                                {friendStatus === 'none' && (
                                     <button
                                         onClick={handleAddFriend}
-                                        className="btn-primary flex items-center gap-2"
+                                        className="bg-primary hover:bg-primary-hover text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-glow-primary/20"
                                     >
                                         <UserPlus size={18} />
                                         Add Friend
                                     </button>
+                                )}
+                                {friendStatus === 'pending_sent' && (
+                                    <button
+                                        disabled
+                                        className="bg-gray-700 text-gray-400 px-6 py-2 rounded-lg font-bold flex items-center gap-2 cursor-not-allowed"
+                                    >
+                                        <TrendingUp size={18} className="animate-pulse" />
+                                        Request Sent
+                                    </button>
+                                )}
+                                {friendStatus === 'pending_received' && (
+                                    <button
+                                        onClick={handleAcceptFriend}
+                                        className="bg-gold text-dark px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gold-hover transition-all shadow-glow-gold/20"
+                                    >
+                                        <UserPlus size={18} />
+                                        Accept Request
+                                    </button>
+                                )}
+                                {friendStatus === 'friend' && (
+                                    <div className="bg-success/20 text-success border border-success/30 px-6 py-2 rounded-lg font-bold flex items-center gap-2">
+                                        <User size={18} />
+                                        Friend
+                                    </div>
                                 )}
                                 <button
                                     onClick={handleMessage}
@@ -153,11 +207,11 @@ const UserProfile: React.FC = () => {
                                     Message
                                 </button>
                                 <button
-                                    className="btn-primary flex items-center gap-2 opacity-50 cursor-not-allowed"
-                                    disabled
+                                    onClick={() => navigate(`/game/trading-post?username=${profile.username}`)}
+                                    className="btn-primary flex items-center gap-2"
                                 >
                                     <TrendingUp size={18} />
-                                    View Trades (Coming Soon)
+                                    View Trades
                                 </button>
                             </div>
                         </div>

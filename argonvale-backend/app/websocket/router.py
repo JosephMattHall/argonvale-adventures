@@ -145,6 +145,15 @@ class GameServer:
         finally:
             db.close()
 
+    def is_user_online(self, user_id: int) -> bool:
+        """Check if a user has any active websocket connections"""
+        for ws, session in self.active_connections.items():
+            if session.user_id == user_id:
+                from starlette.websockets import WebSocketState
+                if ws.client_state == WebSocketState.CONNECTED:
+                    return True
+        return False
+
     def get_active_sockets_for_user(self, user_id: int) -> List[WebSocket]:
         sockets = []
         for ws, session in self.active_connections.items():
@@ -204,8 +213,10 @@ class GameServer:
             input_events = []
             
             if msg_type == "Move":
-                dx = payload.get("direction", {}).get("dx", 0)
-                dy = payload.get("direction", {}).get("dy", 0)
+                new_x = payload.get("x")
+                new_y = payload.get("y")
+                dx = payload.get("direction", {}).get("dx")
+                dy = payload.get("direction", {}).get("dy")
                 zone_id = payload.get("zone_id", "town")
                 
                 # Fetch current pos to calculate absolute

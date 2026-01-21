@@ -11,6 +11,7 @@ export interface Friend {
     id: number;
     username: string;
     avatar_url: string;
+    is_online: boolean;
 }
 
 export interface FriendRequest {
@@ -25,6 +26,13 @@ export interface FriendRequest {
 export const friendsApi = {
     getFriends: async (): Promise<Friend[]> => {
         const response = await axios.get(`${API_URL}/api/friends`, {
+            headers: getAuthHeaders()
+        });
+        return response.data;
+    },
+
+    getOnlineFriends: async (): Promise<Friend[]> => {
+        const response = await axios.get(`${API_URL}/api/friends/online`, {
             headers: getAuthHeaders()
         });
         return response.data;

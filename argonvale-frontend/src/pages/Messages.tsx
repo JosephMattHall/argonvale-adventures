@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { messagesApi } from '../api/messages';
 import type { Conversation, Message } from '../api/messages';
 import { useNotifications } from '../context/NotificationContext';
@@ -270,7 +270,9 @@ const Messages: React.FC = () => {
                                 <div className="w-10 h-10 bg-dark rounded-lg flex items-center justify-center">
                                     <User size={20} className="text-gold" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-white">{selectedConversation.username}</h3>
+                                <Link to={`/game/profile/${selectedConversation.username}`} className="text-lg font-semibold text-white hover:text-gold transition-colors">
+                                    {selectedConversation.username}
+                                </Link>
                             </div>
                         </div>
 
@@ -299,9 +301,9 @@ const Messages: React.FC = () => {
                                         `}>
                                             <div className="flex flex-col">
                                                 {!isOwn && (
-                                                    <span className="text-[10px] font-bold text-gold uppercase mb-1">
+                                                    <Link to={`/game/profile/${msg.sender_username}`} className="text-[10px] font-bold text-gold uppercase mb-1 hover:underline">
                                                         {msg.sender_username}
-                                                    </span>
+                                                    </Link>
                                                 )}
 
                                                 {isChallenge && challenge_metadata ? (

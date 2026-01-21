@@ -32,7 +32,7 @@ from app.websocket import router as ws_router
 app.include_router(ws_router.router, tags=["websocket"])
 
 # New API endpoints
-from app.api import profiles, friends, messages, companions, equipment, shop, management, admin
+from app.api import profiles, friends, messages, companions, equipment, shop, management, admin, trades
 app.include_router(profiles.router)
 app.include_router(friends.router)
 app.include_router(messages.router)
@@ -41,6 +41,7 @@ app.include_router(equipment.router)
 app.include_router(shop.router, prefix="/api/shop", tags=["shop"])
 app.include_router(management.router)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(trades.router, prefix="/api/trades", tags=["trades"])
 
 @app.on_event("startup")
 async def startup_event():

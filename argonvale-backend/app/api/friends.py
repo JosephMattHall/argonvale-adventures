@@ -14,6 +14,7 @@ class FriendResponse(BaseModel):
     id: int
     username: str
     avatar_url: str
+    is_online: bool = False
     
     class Config:
         from_attributes = True
@@ -41,13 +42,49 @@ def get_friends(
     ).all()
     
     friends = []
+    from app.websocket.router import game_server
+    
     for friendship in friendships:
         friend_id = friendship.friend_id if friendship.user_id == current_user.id else friendship.user_id
         friend = db.query(User).filter(User.id == friend_id).first()
         if friend:
-            friends.append(friend)
+            friend_dict = {
+                "id": friend.id,
+                "username": friend.username,
+                "avatar_url": friend.avatar_url,
+                "is_online": game_server.is_user_online(friend.id)
+            }
+            friends.append(friend_dict)
     
     return friends
+
+@router.get("/online", response_model=List[FriendResponse])
+def get_online_friends(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get only friends who are currently online"""
+    friendships = db.query(Friendship).filter(
+        ((Friendship.user_id == current_user.id) | (Friendship.friend_id == current_user.id)),
+        Friendship.status == "accepted"
+    ).all()
+    
+    online_friends = []
+    from app.websocket.router import game_server
+    
+    for friendship in friendships:
+        friend_id = friendship.friend_id if friendship.user_id == current_user.id else friendship.user_id
+        if game_server.is_user_online(friend_id):
+            friend = db.query(User).filter(User.id == friend_id).first()
+            if friend:
+                online_friends.append({
+                    "id": friend.id,
+                    "username": friend.username,
+                    "avatar_url": friend.avatar_url,
+                    "is_online": True
+                })
+    
+    return online_friends
 
 @router.get("/requests", response_model=List[FriendRequestResponse])
 def get_friend_requests(

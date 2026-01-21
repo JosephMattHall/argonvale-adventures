@@ -32,4 +32,5 @@ class User(Base):
 
     companions = relationship("Companion", back_populates="owner")
     items = relationship("Item", back_populates="owner")
+    trade_lots = relationship("TradeLot", back_populates="user")
 

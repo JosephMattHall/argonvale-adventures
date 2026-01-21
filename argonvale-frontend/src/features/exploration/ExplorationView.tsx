@@ -87,6 +87,8 @@ const ExplorationView: React.FC = () => {
 
         sendCommand({
             type: "Move",
+            x: nextX,
+            y: nextY,
             direction: { dx, dy },
             zone_id: currentZoneIdRef.current
         });

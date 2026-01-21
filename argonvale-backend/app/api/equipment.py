@@ -36,6 +36,8 @@ def toggle_equip(item_id: int, db: Session = Depends(get_db), current_user = Dep
     if item.is_equipped:
         item.is_equipped = False
     else:
+        if item.trade_lot_id is not None:
+            raise HTTPException(status_code=400, detail="Cannot equip items currently in a trade lot")
         equipped_count = db.query(Item).filter(Item.owner_id == current_user.id, Item.is_equipped == True).count()
         if equipped_count >= 8:
             raise HTTPException(status_code=400, detail="Cannot equip more than 8 items")
@@ -49,6 +51,9 @@ def use_item(item_id: int, db: Session = Depends(get_db), current_user = Depends
     item = db.query(Item).filter(Item.id == item_id, Item.owner_id == current_user.id).first()
     if not item or item.item_type != "potion":
         raise HTTPException(status_code=404, detail="Potion not found")
+    
+    if item.trade_lot_id is not None:
+        raise HTTPException(status_code=400, detail="Cannot use items currently in a trade lot")
     
     # Simple heal logic: restore 50 HP to first companion
     companion = current_user.companions[0] if current_user.companions else None
@@ -65,6 +70,9 @@ def feed_companion(item_id: int, companion_id: int, db: Session = Depends(get_db
     item = db.query(Item).filter(Item.id == item_id, Item.owner_id == current_user.id).first()
     if not item or item.item_type != "food":
         raise HTTPException(status_code=404, detail="Food item not found")
+    
+    if item.trade_lot_id is not None:
+        raise HTTPException(status_code=400, detail="Cannot use items currently in a trade lot")
     
     companion = db.query(Companion).filter(Companion.id == companion_id, Companion.owner_id == current_user.id).first()
     if not companion:
@@ -96,6 +104,9 @@ def delete_item(item_id: int, db: Session = Depends(get_db), current_user = Depe
     
     if item.is_equipped:
         raise HTTPException(status_code=400, detail="Cannot discard equipped items")
+    
+    if item.trade_lot_id is not None:
+        raise HTTPException(status_code=400, detail="Cannot discard items currently in a trade lot")
     
     db.delete(item)
     db.commit()

@@ -26,14 +26,26 @@ STOCK_AMOUNTS = {
 
 def restock_shop(db: Session):
     """
-    Clears existing shop items (is_template=False, owner_id=None)
-    and stocks 10 items for each category based on rarity weights.
+    Cleans up duplicate shop items and adds new stock additive-ly.
+    Uses unique templates per category and updates existing stock for selected items.
     """
     try:
         logger.info("Starting shop restock...")
         
-        # 1. Clear current listings (only system items that aren't templates)
-        db.query(Item).filter(Item.owner_id == None, Item.is_template == False).delete()
+        # 1. Cleanup Duplicates: Merge existing system items with the same name and rarity
+        current_listings = db.query(Item).filter(Item.owner_id == None, Item.is_template == False).all()
+        unique_map = {} # (name, rarity) -> Item
+        
+        for item in current_listings:
+            key = (item.name, item.rarity)
+            if key in unique_map:
+                # Duplicate found! Merge stock and delete
+                unique_map[key].stock += item.stock
+                db.delete(item)
+            else:
+                unique_map[key] = item
+        
+        db.flush() 
         
         # 2. Get all templates
         templates = db.query(Item).filter(Item.is_template == True).all()
@@ -48,33 +60,40 @@ def restock_shop(db: Session):
             if not cat_templates:
                 continue
             
-            # Select 10 items for this category
-            for _ in range(10):
-                # Pick a rarity based on weights
+            # Select up to 10 unique items for this category
+            available_templates = cat_templates.copy()
+            category_selection = []
+            
+            for _ in range(min(10, len(cat_templates))):
+                if not available_templates:
+                    break
+                    
                 rarity = random.choices(
                     list(RARITY_WEIGHTS.keys()), 
                     weights=list(RARITY_WEIGHTS.values()), 
                     k=1
                 )[0]
                 
-                # Filter templates by rarity
-                eligible = [t for t in cat_templates if t.rarity == rarity]
-                
-                # If no templates for that rarity, fallback to Common
+                eligible = [t for t in available_templates if t.rarity == rarity]
                 if not eligible:
-                    eligible = [t for t in cat_templates if t.rarity == "Common"]
+                    eligible = available_templates
                 
-                if eligible:
-                    template = random.choice(eligible)
-                    
-                    # Create shop listing
-                    min_s, max_s = STOCK_AMOUNTS.get(rarity, (1, 1))
-                    stock = random.randint(min_s, max_s)
-                    
-                    # Relic items: limit to 1 total in shop if picked
-                    if rarity == "Relic":
-                        stock = 1
-                    
+                template = random.choice(eligible)
+                category_selection.append(template)
+                available_templates.remove(template) 
+                
+            for template in category_selection:
+                existing = unique_map.get((template.name, template.rarity))
+                
+                min_s, max_s = STOCK_AMOUNTS.get(template.rarity, (1, 1))
+                new_stock = random.randint(min_s, max_s)
+                
+                if template.rarity == "Relic":
+                    new_stock = 1
+
+                if existing:
+                    existing.stock += new_stock
+                else:
                     new_listing = Item(
                         name=template.name,
                         item_type=template.item_type,
@@ -85,12 +104,13 @@ def restock_shop(db: Session):
                         effect=template.effect,
                         price=template.price,
                         rarity=template.rarity,
-                        stock=stock,
+                        stock=new_stock,
                         is_template=False,
                         owner_id=None
                     )
                     db.add(new_listing)
-        
+                    unique_map[(template.name, template.rarity)] = new_listing
+
         db.commit()
         logger.info("Shop restocking complete.")
         

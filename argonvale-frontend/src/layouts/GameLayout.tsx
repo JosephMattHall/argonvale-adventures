@@ -9,7 +9,10 @@ import {
     TrendingUp,
     Compass,
     ShoppingCart,
-    Trophy
+    Trophy,
+    MessageSquare,
+    Shield,
+    Store
 } from 'lucide-react';
 import CompanionsView from '../features/companions/CompanionsView';
 import CompanionCreation from '../features/companions/CompanionCreation';
@@ -23,8 +26,10 @@ import LeaderboardView from '../features/social/LeaderboardView';
 import MyProfile from '../pages/MyProfile';
 import UserProfile from '../pages/UserProfile';
 import Messages from '../pages/Messages';
-import { MessageSquare, Shield } from 'lucide-react';
+import TradingPost from '../pages/TradingPost';
 import { useUser } from '../context/UserContext';
+import { messagesApi } from '../api/messages';
+import { friendsApi, type Friend } from '../api/friends';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 const AdminView = React.lazy(() => import('../features/admin/AdminView'));
@@ -34,6 +39,8 @@ const GameLayout: React.FC = () => {
     const { profile } = useUser();
     const navigate = useNavigate();
     const location = useLocation();
+    const [unreadCount, setUnreadCount] = React.useState(0);
+    const [onlineFriends, setOnlineFriends] = React.useState<Friend[]>([]);
 
     const processedCombatIds = React.useRef<Set<string>>(new Set());
 
@@ -66,6 +73,50 @@ const GameLayout: React.FC = () => {
         }
     }, [messages, profile, navigate, location.pathname]);
 
+    // Fetch online friends
+    const fetchOnlineFriends = async () => {
+        if (!profile) return;
+        try {
+            const friends = await friendsApi.getOnlineFriends();
+            setOnlineFriends(friends);
+        } catch (err) {
+            console.error("Failed to fetch online friends:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (profile) {
+            fetchOnlineFriends();
+            const interval = setInterval(fetchOnlineFriends, 60000); // 1 min refresh
+            return () => clearInterval(interval);
+        }
+    }, [profile]);
+
+    // Fetch unread count
+    const fetchUnread = async () => {
+        try {
+            const count = await messagesApi.getUnreadCount();
+            setUnreadCount(count);
+        } catch (err) {
+            console.error("Failed to fetch unread count:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (profile) {
+            fetchUnread();
+            const interval = setInterval(fetchUnread, 30000); // 30s refresh
+            return () => clearInterval(interval);
+        }
+    }, [profile]);
+
+    // Reset unread count when visiting messages
+    useEffect(() => {
+        if (location.pathname.startsWith('/game/messages')) {
+            setUnreadCount(0);
+        }
+    }, [location.pathname]);
+
     return (
         <div className="h-screen w-full flex flex-col bg-dark">
             <Navbar />
@@ -94,11 +145,21 @@ const GameLayout: React.FC = () => {
                         <Link to="/game/train" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
                             <TrendingUp size={18} className="text-primary" /> Training
                         </Link>
-                        <Link to="/game/messages" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
-                            <MessageSquare size={18} className="text-secondary" /> Messages
+                        <Link to="/game/messages" className={`block p-3 hover:bg-card-hover rounded transition-all text-white flex items-center justify-between gap-2 ${unreadCount > 0 ? 'border border-red-500/50 bg-red-500/5' : ''}`}>
+                            <div className="flex items-center gap-2">
+                                <MessageSquare size={18} className="text-secondary" /> Messages
+                            </div>
+                            {unreadCount > 0 && (
+                                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-md font-bold min-w-[20px] text-center shadow-glow-red/20 animate-pulse">
+                                    {unreadCount}
+                                </span>
+                            )}
                         </Link>
                         <Link to="/game/leaderboard" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
                             <Trophy size={18} className="text-gold" /> Hall of Heroes
+                        </Link>
+                        <Link to="/game/trading-post" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2">
+                            <Store size={18} className="text-success" /> Trading Post
                         </Link>
                         {profile?.role === 'admin' && (
                             <Link to="/game/admin" className="block p-3 hover:bg-card-hover rounded transition-colors text-white flex items-center gap-2 border-t border-white/5 mt-4 pt-4">
@@ -106,6 +167,41 @@ const GameLayout: React.FC = () => {
                             </Link>
                         )}
                     </nav>
+
+                    {/* Online Friends Section */}
+                    <div className="p-4 border-t border-white/5 bg-black/20 flex flex-col min-h-0">
+                        <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-gray-500 mb-3 tracking-widest">
+                            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                            Online Friends
+                        </div>
+                        <div className="flex-1 overflow-auto custom-scrollbar pr-1">
+                            {onlineFriends.length > 0 ? (
+                                <div className="space-y-2">
+                                    {onlineFriends.map(friend => (
+                                        <Link
+                                            key={friend.id}
+                                            to={`/game/profile/${friend.username}`}
+                                            className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-all border border-transparent hover:border-white/10"
+                                        >
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <div className="w-6 h-6 rounded bg-dark border border-white/10 flex items-center justify-center shrink-0">
+                                                    <Users size={12} className="text-gray-400 group-hover:text-gold transition-colors" />
+                                                </div>
+                                                <span className="text-sm text-gray-300 group-hover:text-white truncate">
+                                                    {friend.username}
+                                                </span>
+                                            </div>
+                                            <div className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_var(--accent-success)] shrink-0" />
+                                        </Link>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[10px] text-gray-600 italic py-2">
+                                    Searching for friends...
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
                     <div className="p-4 border-t border-border-subtle text-xs">
                         <div className="flex items-center gap-2">
@@ -136,6 +232,7 @@ const GameLayout: React.FC = () => {
                                     <Route path="explore" element={<ExplorationView />} />
                                     <Route path="messages" element={<Messages />} />
                                     <Route path="leaderboard" element={<LeaderboardView />} />
+                                    <Route path="trading-post" element={<TradingPost />} />
                                     <Route path="messages/:userId" element={<Messages />} />
                                     <Route path="profile/me" element={<MyProfile />} />
                                     <Route path="profile/:username" element={<UserProfile />} />
@@ -166,16 +263,21 @@ const GameLayout: React.FC = () => {
                     <Package size={20} className="text-gold" />
                     <span className="text-[10px] uppercase font-bold">Bag</span>
                 </Link>
-                <Link to="/game/shop" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
-                    <ShoppingCart size={20} className="text-warning" />
-                    <span className="text-[10px] uppercase font-bold">Shop</span>
+                <Link to="/game/messages" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors relative">
+                    <div className="relative">
+                        <MessageSquare size={20} className="text-secondary" />
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-black animate-pulse" />
+                        )}
+                    </div>
+                    <span className="text-[10px] uppercase font-bold">Inbox</span>
                 </Link>
                 <Link to="/game/train" className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
                     <TrendingUp size={20} className="text-primary" />
                     <span className="text-[10px] uppercase font-bold">Training</span>
                 </Link>
             </nav>
-        </div>
+        </div >
     );
 };
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, JSON, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -28,3 +28,9 @@ class Item(Base):
 
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="items")
+
+    trade_lot_id = Column(Integer, ForeignKey("trade_lots.id"), nullable=True)
+    trade_lot = relationship("TradeLot", back_populates="items")
+
+    trade_offer_id = Column(Integer, ForeignKey("trade_offers.id"), nullable=True)
+    trade_offer = relationship("TradeOffer", back_populates="items")

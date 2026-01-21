@@ -96,3 +96,27 @@ def buy_item(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Transaction failed: {str(e)}")
 
+@router.post("/sell/{item_id}")
+def sell_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    item = db.query(Item).filter(Item.id == item_id, Item.owner_id == current_user.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    if item.is_equipped:
+        raise HTTPException(status_code=400, detail="Cannot sell equipped items")
+    
+    if item.trade_lot_id is not None:
+        raise HTTPException(status_code=400, detail="Cannot sell items currently in a trade lot")
+
+    # Sell for 50% of price
+    sell_price = max(1, item.price // 2)
+    current_user.coins += sell_price
+    
+    db.delete(item)
+    db.commit()
+    
+    return {"status": "success", "message": f"Sold {item.name} for {sell_price} coins", "new_balance": current_user.coins}

@@ -5,7 +5,7 @@ from app.schemas.items import WeaponStats
 class CombatStarted(GameEvent):
     combat_id: str
     attacker_id: int
-    attacker_companion_id: int
+    attacker_companion_id: Optional[int] = None
     defender_id: Optional[int] = None # None for AI
     defender_companion_id: Optional[int] = None
     mode: Literal["pve", "pvp"] = "pve"

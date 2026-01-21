@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Medal, Star, Swords } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { managementApi, type LeaderboardUser, type LeaderboardCompanion } from '../../api/management';
 
 const LeaderboardView: React.FC = () => {
@@ -88,7 +89,9 @@ const LeaderboardView: React.FC = () => {
                                     </div>
                                     <div className="flex-1">
                                         <div className="font-bold text-white flex items-center gap-2">
-                                            {player.username}
+                                            <Link to={`/game/profile/${player.username}`} className="hover:text-gold transition-colors">
+                                                {player.username}
+                                            </Link>
                                             {idx === 0 && <span className="text-[10px] bg-gold/20 text-gold px-2 py-0.5 rounded-full uppercase">Arena King</span>}
                                         </div>
                                         <div className="text-xs text-primary font-bold uppercase tracking-widest">{player.title}</div>
@@ -122,7 +125,9 @@ const LeaderboardView: React.FC = () => {
                                     </div>
                                     <div className="flex-1">
                                         <div className="font-bold text-white">{comp.name}</div>
-                                        <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">{comp.species} • Owner: {comp.owner_name}</div>
+                                        <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                                            {comp.species} • Owner: <Link to={`/game/profile/${comp.owner_name}`} className="text-gold hover:underline">{comp.owner_name}</Link>
+                                        </div>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-2xl font-medieval text-gold">Lv. {comp.level}</div>

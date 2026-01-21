@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Shield, Sword, Zap, Flame, Snowflake, EyeOff, Coins, Sparkles, Info } from 'lucide-react';
 import { renderStatBadges } from '../../utils/itemUtils';
 import { useGameSocket } from '../../hooks/useGameSocket';
@@ -267,7 +267,13 @@ const CombatView: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="font-medieval mb-2 text-red-500 text-xl tracking-wide uppercase">{context.enemy_name}</div>
+                    <div className="font-medieval mb-2 text-red-500 text-xl tracking-wide uppercase">
+                        {context.mode === 'pvp' ? (
+                            <Link to={`/game/profile/${context.enemy_name}`} className="hover:text-gold transition-colors">
+                                {context.enemy_name}
+                            </Link>
+                        ) : context.enemy_name}
+                    </div>
                     <div className="w-full sm:w-48 h-4 bg-black/60 rounded-full overflow-hidden mx-auto border border-white/10 p-0.5">
                         <div className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-700" style={{ width: `${(enemyHp / context.enemy_max_hp) * 100}%` }} />
                     </div>
