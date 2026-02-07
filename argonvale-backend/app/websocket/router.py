@@ -19,7 +19,8 @@ from pspf.events.movement import PlayerMoved, LootFound
 from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue, LeavePvPQueue, ResumeCombat, ForfeitCombat
 from pspf.events.training import TrainingStarted, TrainingCompleted
 from pspf.events.companion import ChooseStarter, CompanionCreated
-from pspf.processors.exploration import ExplorationProcessor
+from pspf.processors.exploration import ExplorationProcessor as BaseExplorationProcessor
+from app.processors.tiled_exploration import TiledExplorationProcessor
 from pspf.processors.combat import CombatProcessor
 from pspf.processors.management import CompanionManagementProcessor, CompanionManagementState
 from pspf.state.base import GameState
@@ -77,7 +78,7 @@ class SyncManager:
 class GameServer:
     def __init__(self):
         self.active_connections: Dict[WebSocket, UserSession] = {}
-        self.exploration = ExplorationProcessor()
+        self.exploration = TiledExplorationProcessor()
         self.combat = CombatProcessor()
         self.management = CompanionManagementProcessor()
         self.sync = SyncManager()
@@ -308,7 +309,7 @@ class GameServer:
                     actor_id=user_id,
                     action_type=payload.get("action_type"),
                     stance=payload.get("stance", "normal"),
-                    item_ids=payload.get("weapon_ids", [])
+                    item_ids=payload.get("item_ids", [])
                 ))
 
             elif msg_type == "ChooseStarter":
@@ -490,7 +491,63 @@ class GameServer:
                 if isinstance(event, PlayerMoved):
                     # Random Encounter Logic
                     exploration_results = self.exploration.process(turn_state, event)
-                    output_events.extend(exploration_results)
+                    
+                    # Post-process exploration results to hydrate and init combat
+                    hydrated_results = []
+                    for res in exploration_results:
+                        if isinstance(res, CombatStarted):
+                            # We need to hydrate user/companion data and init session
+                            db_exp = SessionLocal()
+                            try:
+                                # Get active companion
+                                companion = db_exp.query(Companion).filter(Companion.owner_id == user_id, Companion.is_active == True).first()
+                                if not companion:
+                                    # No active companion, cannot start combat. 
+                                    # Maybe send a warning message instead? 
+                                    # For now, just skip the encounter.
+                                    continue
+                                    
+                                # Get Items 
+                                from app.models.item import Item as DBItem
+                                equipped_db = db_exp.query(DBItem).filter(DBItem.owner_id == user_id, DBItem.is_equipped == True).all()
+                                equipped_items = [{"id": i.id, "name": i.name, "item_type": i.item_type, "stats": i.weapon_stats, "effect": i.effect} for i in equipped_db]
+
+                                # Create new context
+                                new_context = res.context.copy()
+                                new_context.update({
+                                    "companion_id": companion.id,
+                                    "companion_name": companion.name,
+                                    "companion_element": companion.element,
+                                    "companion_image": companion.image_url,
+                                    "player_hp": companion.hp,
+                                    "player_max_hp": companion.max_hp,
+                                    "player_stats": {
+                                        "str": companion.strength,
+                                        "def": companion.defense,
+                                        "spd": companion.speed
+                                    },
+                                    "equipped_items": equipped_items
+                                })
+                                
+                                # Create new event instance
+                                hydrated_event = res.model_copy(update={
+                                    "attacker_companion_id": companion.id,
+                                    "context": new_context
+                                })
+                                
+                                # Initializes the session in CombatProcessor
+                                self.combat.process(turn_state, hydrated_event)
+                                hydrated_results.append(hydrated_event)
+                                logger.info(f"Initialized Random Encounter {res.combat_id} for user {user_id}")
+                                
+                            except Exception as e:
+                                logger.error(f"Failed to hydrate encounter: {e}")
+                            finally:
+                                db_exp.close()
+                        else:
+                            hydrated_results.append(res)
+
+                    output_events.extend(hydrated_results)
 
                 # Combat
                 if isinstance(event, (CombatAction, ForfeitCombat)):

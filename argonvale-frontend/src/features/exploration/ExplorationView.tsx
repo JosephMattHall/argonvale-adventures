@@ -11,13 +11,20 @@ const TILE_SIZE = 48; // Display size (pixels)
 interface TilemapData {
     width: number;
     height: number;
-    tileSize: number;
-    tileset: string;
-    layers: {
-        ground: number[];
-        objects: number[];
-        collision: number[];
-    };
+    tilewidth: number;
+    tileheight: number;
+    layers: Array<{
+        name: string;
+        type: string;
+        data?: number[];
+        visible?: boolean;
+        opacity?: number;
+    }>;
+    tilesets: Array<{
+        firstgid: number;
+        image: string;
+        name: string;
+    }>;
 }
 
 
@@ -56,7 +63,11 @@ const ExplorationView: React.FC = () => {
         if (!mapDataRef.current) return true;
         const { width, height, layers } = mapDataRef.current;
         if (x < 0 || x >= width || y < 0 || y >= height) return true;
-        return layers.collision[y * width + x] === 1;
+
+        const collisionLayer = layers.find(l => l.name === 'collision');
+        if (!collisionLayer || !collisionLayer.data) return false;
+
+        return collisionLayer.data[y * width + x] !== 0; // Tiled: 0 is empty, anything else is a tile ID
     };
 
     // Movement Logic
@@ -129,7 +140,8 @@ const ExplorationView: React.FC = () => {
                     needsReset = true;
                 } else {
                     const idx = safeY * data.width + safeX;
-                    if (data.layers.collision[idx] === 1) {
+                    const collisionLayer = data.layers.find(l => l.name === 'collision');
+                    if (collisionLayer && collisionLayer.data && collisionLayer.data[idx] !== 0) {
                         needsReset = true;
                     }
                 }
@@ -279,13 +291,23 @@ const ExplorationView: React.FC = () => {
             for (let x = 0; x < viewportW; x++) {
                 const worldX = camX + x;
                 const worldY = camY + y;
+
+                // Bounds check
+                if (worldX < 0 || worldX >= mapData.width || worldY < 0 || worldY >= mapData.height) continue;
+
                 const idx = worldY * mapData.width + worldX;
 
-                if (idx < mapData.layers.ground.length) {
-                    drawTile(mapData.layers.ground[idx], x * renderTileSize, y * renderTileSize);
-                }
-                if (mapData.layers.objects[idx] !== 0) {
-                    drawTile(mapData.layers.objects[idx], x * renderTileSize, y * renderTileSize);
+                // Iterate layers
+                for (const layer of mapData.layers) {
+                    if (layer.type === 'tilelayer' && layer.visible !== false && layer.data) {
+                        // Skip collision layer for visual rendering usually, or render debug
+                        if (layer.name === 'collision') continue;
+
+                        const tileId = layer.data[idx];
+                        if (tileId !== 0) {
+                            drawTile(tileId, x * renderTileSize, y * renderTileSize);
+                        }
+                    }
                 }
             }
         }
