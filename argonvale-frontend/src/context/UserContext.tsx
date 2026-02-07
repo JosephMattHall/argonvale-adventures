@@ -13,7 +13,7 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, logout } = useAuth();
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -27,12 +27,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const data = await profilesApi.getMyProfile();
             setProfile(data);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to load user profile:', error);
+            // If token is invalid/expired, logout automatically
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                logout();
+            }
         } finally {
             setLoading(false);
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, logout]);
 
     useEffect(() => {
         refreshProfile();
