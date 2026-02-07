@@ -308,7 +308,7 @@ class GameServer:
                     actor_id=user_id,
                     action_type=payload.get("action_type"),
                     stance=payload.get("stance", "normal"),
-                    weapon_ids=payload.get("weapon_ids", [])
+                    item_ids=payload.get("weapon_ids", [])
                 ))
 
             elif msg_type == "ChooseStarter":
