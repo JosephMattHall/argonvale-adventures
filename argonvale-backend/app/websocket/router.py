@@ -15,7 +15,7 @@ from app.auth.security import SECRET_KEY, ALGORITHM
 
 # PSPF Imports
 from pspf.events.base import GameEvent
-from pspf.events.movement import PlayerMoved, LootFound
+from pspf.events.movement import PlayerMoved, LootFound, TeleportPlayer
 from pspf.events.combat import CombatAction, CombatStarted, TurnProcessed, CombatEnded, JoinPvPQueue, LeavePvPQueue, ResumeCombat, ForfeitCombat
 from pspf.events.training import TrainingStarted, TrainingCompleted
 from pspf.events.companion import ChooseStarter, CompanionCreated

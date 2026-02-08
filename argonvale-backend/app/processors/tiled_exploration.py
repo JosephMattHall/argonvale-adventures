@@ -26,13 +26,13 @@ class TiledExplorationProcessor(ExplorationProcessor):
         if os.path.exists(self.custom_maps_dir):
             logger.info(f"Loading Tiled maps from {self.custom_maps_dir}")
             for filename in os.listdir(self.custom_maps_dir):
-                if filename.endswith(".json"):
-                    map_id = filename.replace(".json", "")
+                if filename.endswith(".json") or filename.endswith(".tmj"):
+                    map_id = filename.replace(".json", "").replace(".tmj", "")
                     try:
                         with open(os.path.join(self.custom_maps_dir, filename), 'r') as f:
                             tiled_data = json.load(f)
                             self.maps_data[map_id] = self._parse_tiled_map(tiled_data)
-                            logger.info(f"Loaded map: {map_id}")
+                            logger.info(f"Loaded map: {map_id} ({filename})")
                     except Exception as e:
                         logger.error(f"Failed to load map {map_id}: {e}")
         else:
@@ -79,28 +79,39 @@ class TiledExplorationProcessor(ExplorationProcessor):
             elif layer["type"] == "objectgroup":
                 if layer["name"].lower() == "warps":
                     for obj in layer.get("objects", []):
-                        x = int(obj["x"] // tiled_data["tilewidth"])
-                        y = int(obj["y"] // tiled_data["tileheight"])
+                        x_start = int(obj["x"] // tiled_data["tilewidth"])
+                        y_start = int(obj["y"] // tiled_data["tileheight"])
+                        w_tiles = int(obj["width"] // tiled_data["tilewidth"])
+                        h_tiles = int(obj["height"] // tiled_data["tileheight"])
                         
-                        warp_data = {
-                            "x": x,
-                            "y": y,
-                            "target_zone": "town", # Default
-                            "target_x": 0,
-                            "target_y": 0
-                        }
-                        
-                        # Parse custom properties for target
-                        for prop in obj.get("properties", []):
-                            if prop["name"] == "target_zone":
-                                warp_data["target_zone"] = prop["value"]
-                            elif prop["name"] == "target_x":
-                                warp_data["target_x"] = prop["value"]
-                            elif prop["name"] == "target_y":
-                                warp_data["target_y"] = prop["value"]
-                        
-                        parsed["warps"].append(warp_data)
+                        # Ensure at least 1x1
+                        w_tiles = max(1, w_tiles)
+                        h_tiles = max(1, h_tiles)
 
+                        for dx in range(w_tiles):
+                            for dy in range(h_tiles):
+                                warp_data = {
+                                    "x": x_start + dx,
+                                    "y": y_start + dy,
+                                    "target_zone": "town", # Default
+                                    "target_x": 0,
+                                    "target_y": 0
+                                }
+                                
+                                # Parse custom properties for target
+                                for prop in obj.get("properties", []):
+                                    if prop["name"] == "target_zone":
+                                        warp_data["target_zone"] = prop["value"]
+                                    elif prop["name"] == "target_x":
+                                        warp_data["target_x"] = prop["value"]
+                                    elif prop["name"] == "target_y":
+                                        warp_data["target_y"] = prop["value"]
+                                
+                                parsed["warps"].append(warp_data)
+                                logger.info(f"Registered warp at ({warp_data['x']}, {warp_data['y']}) -> {warp_data['target_zone']}")
+        
+        # Summary Log
+        logger.info(f"Map {tiled_data.get('width')}x{tiled_data.get('height')} parsed with {len(parsed['warps'])} warps.")
         return parsed
 
     def is_valid_move(self, zone_id, x, y):
@@ -109,7 +120,6 @@ class TiledExplorationProcessor(ExplorationProcessor):
         """
         # If map unknown, fallback to valid (dev mode)
         if zone_id not in self.maps_data:
-            # Try to lazy load? Or just return True
             return True
             
         map_info = self.maps_data[zone_id]
@@ -123,3 +133,32 @@ class TiledExplorationProcessor(ExplorationProcessor):
             return False
             
         return True
+
+    def process(self, state, event: GameEvent) -> list[GameEvent]:
+        # 1. Run Base Logic (Random Encounters / Loot)
+        events = super().process(state, event)
+        
+        
+        # 2. Check Warps
+        from pspf.events.movement import PlayerMoved, TeleportPlayer
+        
+        if isinstance(event, PlayerMoved):
+            zone_id = event.zone_id
+            x = event.x
+            y = event.y
+            
+            if zone_id in self.maps_data:
+                map_info = self.maps_data[zone_id]
+                for warp in map_info["warps"]:
+                    if warp["x"] == x and warp["y"] == y:
+                        # Trigger Warp!
+                        logger.info(f"Player {event.player_id} warped from {zone_id} to {warp['target_zone']}")
+                        events.append(TeleportPlayer.create(
+                            player_id=event.player_id,
+                            zone_id=warp["target_zone"],
+                            x=warp["target_x"],
+                            y=warp["target_y"]
+                        ))
+                        break # Only one warp at a time
+        
+        return events

@@ -15,6 +15,21 @@ const BattleSelection: React.FC = () => {
     const encounterContext = location.state?.encounterContext;
     const encounterCombatId = location.state?.combatId;
     const isEncounterMode = !!encounterContext;
+    const isBrokenPve = !encounterContext && typeof encounterCombatId === 'string' && encounterCombatId.startsWith('pve_');
+
+    if (isBrokenPve) {
+        return (
+            <div className="flex items-center justify-center h-full text-red-500 font-medieval text-2xl flex-col gap-4">
+                <div>⚠️ ENCOUNTER ERROR</div>
+                <div className="text-sm font-sans text-gray-400">Battle data could not be loaded.</div>
+                <button onClick={() => navigate('/game/explore')} className="btn-primary px-6 py-2 text-sm mt-4">Return to Exploration</button>
+            </div>
+        );
+    }
+
+    useEffect(() => {
+        console.log("BattleSelection Mounted. Context:", encounterContext, "CombatID:", encounterCombatId);
+    }, []);
 
     const [companions, setCompanions] = useState<Companion[]>([]);
     const [fullInventory, setFullInventory] = useState<Item[]>([]);

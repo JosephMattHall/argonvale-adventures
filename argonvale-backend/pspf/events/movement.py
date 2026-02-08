@@ -12,3 +12,9 @@ class LootFound(GameEvent):
     zone_id: str
     coins_found: int
     item_ids_found: List[int]
+
+class TeleportPlayer(GameEvent):
+    player_id: int
+    zone_id: str
+    x: int
+    y: int

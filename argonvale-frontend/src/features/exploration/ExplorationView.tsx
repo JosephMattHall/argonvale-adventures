@@ -24,6 +24,7 @@ interface TilemapData {
         firstgid: number;
         image: string;
         name: string;
+        columns?: number;
     }>;
 }
 
@@ -38,9 +39,18 @@ const ExplorationView: React.FC = () => {
     const [otherPlayers, setOtherPlayers] = useState<Record<number, { x: number, y: number, username: string }>>({});
 
     // Sync zone and position state after profile loads (fixes race condition)
+    // Refs
+    const hasInitialLoadRef = useRef(false);
+
+    // Sync zone and position state after profile loads (fixes race condition)
     useEffect(() => {
-        if (!loading && profile) {
+        if (!loading && profile && !hasInitialLoadRef.current) {
+            hasInitialLoadRef.current = true;
+
             if (profile.last_zone_id) setCurrentZoneId(profile.last_zone_id);
+
+            // Logic: If Town, start at Center (force reset via invalid coords). 
+            // If Wild, keep last known position.
             if (profile.last_x !== undefined && profile.last_y !== undefined) {
                 setPlayerPos({ x: profile.last_x, y: profile.last_y });
             }
@@ -115,10 +125,20 @@ const ExplorationView: React.FC = () => {
                 // Clear other players when changing zones
                 setOtherPlayers({});
 
-                // Load Map JSON
-                const res = await fetch(`/maps/${currentZoneId}.json`);
-                if (!res.ok) throw new Error("Map not found");
+                // Load Map JSON (Try .tmj first, then .json)
+                console.log(`Attempting to load map: ${currentZoneId}`);
+                let res = await fetch(`/maps/${currentZoneId}.tmj`);
+                console.log(`Fetch .tmj status: ${res.status}`);
+
+                if (!res.ok) {
+                    console.log(`Falling back to .json for ${currentZoneId}`);
+                    res = await fetch(`/maps/${currentZoneId}.json`);
+                    console.log(`Fetch .json status: ${res.status}`);
+                    if (!res.ok) throw new Error(`Map not found: ${currentZoneId}`);
+                }
+
                 const data: TilemapData = await res.json();
+                console.log("Map data loaded successfully", data);
                 setMapData(data);
                 mapDataRef.current = data; // Immedate ref update for validation
 
@@ -178,6 +198,7 @@ const ExplorationView: React.FC = () => {
         newMessages.forEach((msg: any) => {
             // 1. PvE Encounters
             if (msg.type === 'CombatStarted' && msg.attacker_id == profile?.id && msg.mode === 'pve') {
+                console.log("Navigating to Battle Selection:", msg);
                 navigate('/game/battle-select', {
                     state: {
                         encounterContext: msg.context,
@@ -273,12 +294,17 @@ const ExplorationView: React.FC = () => {
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-        const APP_TILES_ROW_COUNT = 5;
+        const tileset = mapData.tilesets[0];
+        const cols = tileset.columns || 21; // Fallback to known default if missing
 
         const drawTile = (tileId: number, screenX: number, screenY: number) => {
             if (tileId === 0) return;
-            const srcX = (tileId % APP_TILES_ROW_COUNT) * 48;
-            const srcY = Math.floor(tileId / APP_TILES_ROW_COUNT) * 48;
+            // Tiled uses 1-based indexing for GIDs in logic, but 0-based for calculation usually
+            // Adjust for firstgid if needed (usually 1)
+            const localId = tileId - tileset.firstgid;
+
+            const srcX = (localId % cols) * TILE_SIZE;
+            const srcY = Math.floor(localId / cols) * TILE_SIZE;
 
             ctx.drawImage(tilesetImage,
                 srcX, srcY, 48, 48,
