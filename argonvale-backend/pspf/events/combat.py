@@ -8,7 +8,7 @@ class CombatStarted(GameEvent):
     attacker_companion_id: Optional[int] = None
     defender_id: Optional[int] = None # None for AI
     defender_companion_id: Optional[int] = None
-    mode: Literal["pve", "pvp"] = "pve"
+    mode: Literal["pve", "pvp", "PVE_PRACTICE"] = "pve"
     context: Dict[str, Any] = {} # stats, names, etc
 
 class CombatAction(GameEvent):
@@ -31,7 +31,7 @@ class TurnProcessed(GameEvent):
     # Metadata for broadcasting
     attacker_id: int
     defender_id: Optional[int] = None
-    mode: Literal["pve", "pvp"] = "pve"
+    mode: Literal["pve", "pvp", "PVE_PRACTICE"] = "pve"
     
     # Status Indicators
     player_frozen_until: int = 0
@@ -47,7 +47,7 @@ class CombatEnded(GameEvent):
     attacker_companion_id: int
     defender_id: Optional[int] = None
     defender_companion_id: Optional[int] = None
-    mode: Literal["pve", "pvp"] = "pve"
+    mode: Literal["pve", "pvp", "PVE_PRACTICE"] = "pve"
     loot: Optional[Dict[str, Any]] = None
     dropped_item: Optional[Dict[str, Any]] = None # Item template data
     xp_gained: int = 0

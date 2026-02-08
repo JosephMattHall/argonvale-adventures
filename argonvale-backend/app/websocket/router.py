@@ -1021,6 +1021,96 @@ class GameServer:
                                     await opp_ws.send_text(json.dumps(opp_msg))
                                 except Exception as e:
                                     logger.error(f"Failed to broadcast to opponent {opp_id}: {e}")
+
+                # Bot Logic for Practice Mode
+                if isinstance(evt, TurnProcessed) and evt.mode == "PVE_PRACTICE":
+                    if evt.next_turn_id == "cpu": # Assuming practice opponent is ID "cpu" or similar?
+                        # Wait, in generate_practice_opponent we didn't specify an ID.
+                        # CombatSession assigns player 2 ID.
+                        # Since user is Player 1, Player 2 is the bot.
+                        
+                        # We need to know who the bot is. 
+                        # In single player modes, p1=user, p2=cpu usually.
+                        # Let's check if next_turn_id is NOT the user.
+                        if evt.next_turn_id != user_id:
+                             # It's the bot's turn!
+                             logger.info(f"Bot Turn in Practice Mode (Combat {evt.combat_id})")
+                             
+                             # Simple AI:
+                             # 1. Check HP
+                             # evt.attacker_hp (Player 1) vs evt.defender_hp (Player 2 / Bot) ???
+                             # TurnProcessed event struct: 
+                             # attacker_id = who JUST acted. 
+                             # next_turn_id = who acts NEXT.
+                             
+                             # Use session to get bot stats?
+                             session = self.combat.get_session(evt.combat_id)
+                             if session:
+                                 bot = session.player2
+                                 
+                                 action_type = "attack"
+                                 item_id = None
+                                 
+                                 # Healing Logic
+                                 if bot.hp < (bot.max_hp * 0.3):
+                                     # Look for potion
+                                     potion = next((i for i in bot.items if i.get("effect", {}).get("type") == "heal" or "potion" in i.get("name", "").lower()), None)
+                                     if potion:
+                                         action_type = "use_item"
+                                         item_id = potion["id"]
+                                         logger.info(f"Bot choosing to heal with {potion['name']}")
+                                 
+                                 # Attack Logic (fallback)
+                                 if action_type == "attack":
+                                      # Choose strongest weapon? Or just random?
+                                      # For now, just attack (default weapon usage handled by processor if item_id not sent?)
+                                      # Processor needs item_id for weapons.
+                                      weapons = [i for i in bot.items if i.get("item_type") == "weapon"]
+                                      if weapons:
+                                          # Pick one
+                                          w = sorted(weapons, key=lambda x: sum(x.get("stats", {}).get("attack", {}).values()), reverse=True)[0]
+                                          item_id = w["id"]
+                
+                                 # Create Action
+                                 # DO NOT await sleep here, it blocks the socket loop!
+                                 # Ideally schedule a task.
+                                 async def bot_act():
+                                     await asyncio.sleep(1.0) # Artificial Delay
+                                     bot_action = CombatAction.create(
+                                         combat_id=evt.combat_id,
+                                         attacker_id=bot.id, # The bot's ID
+                                         action_type=action_type,
+                                         item_id=item_id,
+                                         target_id=user_id
+                                     )
+                                     # Process immediately via router logic
+                                     # We need to call self.handle_message-like logic or just inject into combat processor
+                                     # But we need to broadcast results too!
+                                     
+                                     # Best way: Simulate receiving a message from the "bot"
+                                     # Or just process and broadcast here.
+                                     
+                                     bot_results = self.combat.process(turn_state, bot_action)
+                                     
+                                     # Send results to USER
+                                     for res in bot_results:
+                                         msg = res.model_dump(mode='json')
+                                         msg["type"] = res.__class__.__name__
+                                         await websocket.send_text(json.dumps(msg))
+                                         
+                                     # Handle recursive turns? (e.g. if bot gets another turn?)
+                                     # This logic only triggers on TurnProcessed output from the user's loop.
+                                     # If bot generates TurnProcessed, we need to trigger again?
+                                     # Yes, if we want bot chain.
+                                     # But for now, user -> bot -> user is fine.
+                                     
+                                 asyncio.create_task(bot_act())
+
+                # Persistence: Skip for Practice Mode
+                if isinstance(evt, CombatEnded) and evt.mode == "PVE_PRACTICE":
+                     logger.info(f"Practice Match {evt.combat_id} ended. Skipping persistence.")
+                     return # Skip the persistence loop below
+
                 
         except Exception as e:
             logger.error(f"Error processing message: {e}")

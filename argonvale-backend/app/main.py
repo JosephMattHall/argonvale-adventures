@@ -41,7 +41,11 @@ app.include_router(equipment.router)
 app.include_router(shop.router, prefix="/api/shop", tags=["shop"])
 app.include_router(management.router)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(management.router)
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(trades.router, prefix="/api/trades", tags=["trades"])
+from app.api import battles
+app.include_router(battles.router)
 
 @app.on_event("startup")
 async def startup_event():

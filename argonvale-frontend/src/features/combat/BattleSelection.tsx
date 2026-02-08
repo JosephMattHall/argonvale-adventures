@@ -455,6 +455,35 @@ const BattleSelection: React.FC = () => {
                                     </div>
                                 ) : 'JOIN PVP QUEUE'}
                             </button>
+
+                            {/* Practice Mode Button */}
+                            <button
+                                disabled={selectedCompanionId === null || (selectedCompanion?.hp === 0) || isStarting || isQueuing}
+                                onClick={async () => {
+                                    if (!selectedCompanionId) return;
+                                    setIsStarting(true);
+                                    try {
+                                        const { battlesApi } = await import('../../api/battles');
+                                        const data = await battlesApi.startPracticeBattle(selectedCompanionId);
+
+                                        // Join the session via socket
+                                        setInitialMsgCount(messages.length);
+                                        sendCommand({
+                                            type: "JoinPvEEncounter",
+                                            combat_id: data.combat_id,
+                                            companion_id: selectedCompanionId,
+                                            context: data.context
+                                        });
+
+                                    } catch (err: any) {
+                                        alert(err.response?.data?.detail || "Failed to start practice");
+                                        setIsStarting(false);
+                                    }
+                                }}
+                                className="w-full max-w-sm py-2 text-xs lg:text-sm font-medieval text-blue-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 rounded transition-all uppercase tracking-widest relative z-10"
+                            >
+                                Practice Battle (AI)
+                            </button>
                         </div>
                     )}
                 </div>
