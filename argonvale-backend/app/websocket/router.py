@@ -888,6 +888,36 @@ class GameServer:
                         finally:
                             db_enc.close()
 
+                    # Warp Sync: Persist new location if player teleported
+                    if isinstance(out_event, TeleportPlayer):
+                        logger.info(f"Syncing Teleport state for user {out_event.player_id} -> {out_event.zone_id} ({out_event.x}, {out_event.y})")
+                        
+                        # A. Update DB
+                        db_warp = SessionLocal()
+                        try:
+                            u = db_warp.query(User).filter(User.id == out_event.player_id).first()
+                            if u:
+                                u.last_zone_id = out_event.zone_id
+                                u.last_x = out_event.x
+                                u.last_y = out_event.y
+                                db_warp.commit()
+                                logger.info(f"Persisted new warp location for user {u.username}")
+                        except Exception as e:
+                            logger.error(f"Failed to persist warp location: {e}")
+                            db_warp.rollback()
+                        finally:
+                            db_warp.close()
+                            
+                        # B. Update Session State (Important for subscription management!)
+                        if out_event.player_id == user_id:
+                            # 1. Unsubscribe from old zone
+                            if user_session.current_zone != out_event.zone_id:
+                                logger.info(f"Switching generic subscription from {user_session.current_zone} to {out_event.zone_id}")
+                                self.sync.unsubscribe(user_session.current_zone, websocket)
+                                self.sync.subscribe(out_event.zone_id, websocket)
+                                user_session.current_zone = out_event.zone_id
+
+
                 # **Persistence: Save combat results to DB**
                 for out_event in output_events:
                     if isinstance(out_event, CombatEnded):
